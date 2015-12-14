@@ -34,10 +34,19 @@ public class ReplicationFailoverTest extends BaseReplication {
 
 
     @Test
-    public void testErrorWriteOnSlave() throws SQLException {
+    public void readOnlyPropagatesToServerAlias() throws SQLException {
+        assureReadOnly(true);
+    }
+
+    @Test
+    public void assureReadOnly() throws SQLException {
+        assureReadOnly(false);
+    }
+
+    private void assureReadOnly(boolean useAlias) throws SQLException {
         Connection connection = null;
         try {
-            connection = getNewConnection("&assureReadOnly=true", false);
+            connection = getNewConnection(useAlias?"&readOnlyPropagatesToServer=true":"&assureReadOnly=true", false);
             connection.setReadOnly(true);
             Statement stmt = connection.createStatement();
             stmt.execute("drop table  if exists replicationDelete" + jobId);
@@ -59,7 +68,6 @@ public class ReplicationFailoverTest extends BaseReplication {
             }
         }
     }
-
 
     @Test
     public void pingReconnectAfterFailover() throws Throwable {

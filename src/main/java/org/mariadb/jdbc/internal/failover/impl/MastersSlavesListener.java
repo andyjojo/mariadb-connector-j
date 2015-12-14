@@ -321,7 +321,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                 secondaryProtocol.close();
             }
 
-//            log.trace("found active secondary connection");
+            //log.trace("found active secondary connection");
             this.secondaryProtocol = newSecondaryProtocol;
 
             //if asked to be on read only connection, switching to this new connection
@@ -329,7 +329,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                 try {
                     syncConnection(currentProtocol, this.secondaryProtocol);
                 } catch (Exception e) {
-//                    log.debug("Some error append during connection parameter synchronisation : ", e);
+                    //log.debug("Some error append during connection parameter synchronisation : ", e);
                 }
                 currentProtocol = this.secondaryProtocol;
             }
@@ -337,15 +337,6 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                 setSessionReadOnly(true, this.secondaryProtocol);
             }
 
-//            if (log.isDebugEnabled()) {
-//                if (getSecondaryHostFailTimestamp() > 0) {
-//                    log.debug("new active secondary node [" + newSecondaryProtocol.getHostAddress().toString() + "] connection"
-//                            + " established after " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - getSecondaryHostFailNanos()));
-//                } else
-//                    log.debug("new active secondary node [" + newSecondaryProtocol.getHostAddress().toString() + "] connection
-// established");
-//
-//            }
             resetSecondaryFailoverData();
             if (!isMasterHostFail()) {
                 stopFailover();
@@ -374,13 +365,13 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                     if (!isSecondaryHostFail()) {
                         proxy.lock.lock();
                         try {
-//                            log.trace("switching to secondary connection");
+                            // log.trace("switching to secondary connection");
                             syncConnection(this.masterProtocol, this.secondaryProtocol);
                             currentProtocol = this.secondaryProtocol;
-//                            log.trace("current connection is now secondary");
+                            // log.trace("current connection is now secondary");
                             return;
                         } catch (QueryException e) {
-//                            log.trace("switching to secondary connection failed", e);
+                            // log.trace("switching to secondary connection failed", e);
                             if (setSecondaryHostFail()) {
                                 addToBlacklist(secondaryProtocol.getHostAddress());
                             }
@@ -398,13 +389,13 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
 
                         proxy.lock.lock();
                         try {
-//                            log.trace("switching to master connection");
+                            // log.trace("switching to master connection");
                             syncConnection(this.secondaryProtocol, this.masterProtocol);
                             currentProtocol = this.masterProtocol;
-//                            log.debug("current connection is now master");
+                            // log.debug("current connection is now master");
                             return;
                         } catch (QueryException e) {
-//                            log.debug("switching to master connection failed", e);
+                            // log.debug("switching to master connection failed", e);
                             if (setMasterHostFail()) {
                                 addToBlacklist(masterProtocol.getHostAddress());
                             }
@@ -415,7 +406,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                     if (urlParser.getOptions().autoReconnect) {
                         reconnectFailedConnection(new SearchFilter(false, true, false, true));
                         //connection established, no need to send Exception !
-//                        log.trace("switching to master connection");
+                        // log.trace("switching to master connection");
                         proxy.lock.lock();
                         try {
                             syncConnection(this.secondaryProtocol, this.masterProtocol);
@@ -423,7 +414,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                         } finally {
                             proxy.lock.unlock();
                         }
-//                        log.debug("current connection is now master");
+                        // log.debug("current connection is now master");
                         return;
                     }
                     launchFailLoopIfNotlaunched(false);
@@ -737,7 +728,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
                     } catch (QueryException e) {
                         masterFail = true;
                     }
-    
+
                     if (masterFail && setMasterHostFail()) {
                         try {
                             listener.primaryFail(null, null);
