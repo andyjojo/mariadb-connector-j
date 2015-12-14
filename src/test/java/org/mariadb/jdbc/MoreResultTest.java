@@ -112,7 +112,6 @@ public class MoreResultTest extends BaseTest {
 
     @Test
     public void basicTest() throws SQLException {
-        log.debug("basicTest begin");
         Connection connection = null;
         try {
             connection = setConnection("&allowMultiQueries=true");
@@ -131,7 +130,6 @@ public class MoreResultTest extends BaseTest {
             }
             assertTrue(count > 0);
             assertFalse(statement.getMoreResults());
-            log.debug("basicTest end");
         } finally {
             connection.close();
         }
@@ -140,7 +138,6 @@ public class MoreResultTest extends BaseTest {
 
     @Test
     public void setMaxRowsMulti() throws Exception {
-        log.debug("setMaxRowsMulti begin");
         Connection connection = null;
         try {
             connection = setConnection("&allowMultiQueries=true");
@@ -171,7 +168,6 @@ public class MoreResultTest extends BaseTest {
             }
             rs.close();
             assertEquals(1, cnt);
-            log.debug("setMaxRowsMulti end");
         } finally {
             connection.close();
         }
@@ -179,7 +175,6 @@ public class MoreResultTest extends BaseTest {
 
     @Test
     public void updateTest() throws SQLException {
-        log.debug("updateTest begin");
         Connection connection = null;
         try {
             connection = setConnection("&allowMultiQueries=true");
@@ -187,7 +182,6 @@ public class MoreResultTest extends BaseTest {
             statement.execute("update MoreResultTestT5 set test='a " + System.currentTimeMillis()
                     + "' where id = 2;select * from MoreResultTestT2;");
             int updateNb = statement.getUpdateCount();
-            log.debug("statement.getUpdateCount() " + updateNb);
             assertTrue(updateNb == 2);
             assertTrue(statement.getMoreResults());
             ResultSet rs = statement.getResultSet();
@@ -197,7 +191,6 @@ public class MoreResultTest extends BaseTest {
             }
             assertTrue(count > 0);
             assertFalse(statement.getMoreResults());
-            log.debug("updateTest end");
         } finally {
             connection.close();
         }
@@ -205,7 +198,6 @@ public class MoreResultTest extends BaseTest {
 
     @Test
     public void updateTest2() throws SQLException {
-        log.debug("updateTest2 begin");
         Connection connection = null;
         try {
             connection = setConnection("&allowMultiQueries=true");
@@ -221,9 +213,7 @@ public class MoreResultTest extends BaseTest {
             statement.getMoreResults();
 
             int updateNb = statement.getUpdateCount();
-            log.debug("statement.getUpdateCount() " + updateNb);
             assertEquals(2, updateNb);
-            log.debug("updateTest2 end");
         } finally {
             connection.close();
         }

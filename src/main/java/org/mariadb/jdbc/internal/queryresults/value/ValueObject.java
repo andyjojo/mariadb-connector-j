@@ -62,33 +62,33 @@ public interface ValueObject {
     int TINYINT1_IS_BIT = 1;
     int YEAR_IS_DATE_TYPE = 2;
 
-    String getString(Calendar cal);
+    String getString(Calendar cal) throws SQLException;
 
-    String getString();
+    String getString() throws SQLException;
 
-    long getLong();
+    long getLong() throws SQLException;
 
-    int getInt();
+    int getInt() throws SQLException;
 
-    short getShort();
+    short getShort() throws SQLException;
 
-    byte getByte();
+    byte getByte() throws SQLException;
 
-    byte[] getBytes();
+    byte[] getBytes() throws SQLException;
 
-    float getFloat();
+    float getFloat() throws SQLException;
 
-    double getDouble();
+    double getDouble() throws SQLException;
 
-    BigDecimal getBigDecimal();
+    BigDecimal getBigDecimal() throws SQLException;
 
-    BigInteger getBigInteger();
+    BigInteger getBigInteger() throws SQLException;
 
-    InputStream getInputStream();
+    InputStream getInputStream() throws SQLException;
 
-    InputStream getBinaryInputStream();
+    InputStream getBinaryInputStream() throws SQLException;
 
-    Object getObject(int datatypeMappingFlags, Calendar cal) throws ParseException;
+    Object getObject(int datatypeMappingFlags, Calendar cal) throws SQLException, ParseException;
 
     Date getDate(Calendar cal) throws ParseException;
 
@@ -96,9 +96,9 @@ public interface ValueObject {
 
     Timestamp getTimestamp(Calendar cal) throws ParseException;
 
-    boolean getBoolean();
+    boolean getBoolean() throws SQLException;
 
-    boolean isNull();
+    boolean isNull() throws SQLException;
 
-    Blob getBlob();
+    Blob getBlob() throws SQLException;
 }

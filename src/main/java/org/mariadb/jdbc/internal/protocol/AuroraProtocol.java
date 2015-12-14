@@ -280,9 +280,6 @@ public class AuroraProtocol extends MastersSlavesProtocol {
         } catch (SQLException sqle) {
             throw new QueryException("could not check the 'innodb_read_only' variable status on " + this.getHostAddress()
                     + " : " + sqle.getMessage(), -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), sqle);
-        } catch (IOException ioe) {
-            throw new QueryException("could not check the 'innodb_read_only' variable status on " + this.getHostAddress()
-                    + " : " + ioe.getMessage(), -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), ioe);
         } finally {
             proxy.lock.unlock();
         }

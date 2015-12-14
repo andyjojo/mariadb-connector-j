@@ -180,8 +180,6 @@ public class AuroraListener extends MastersSlavesListener {
                 }
             } catch (SQLException exception) {
                 //eat exception because cannot happen in this getString()
-            } catch (IOException ioe) {
-                //eat exception
             } catch (QueryException qe) {
                 if (proxy.hasToHandleFailover(qe) && setSecondaryHostFail()) {
                     addToBlacklist(currentProtocol.getHostAddress());
