@@ -44,6 +44,34 @@ public class MultiTest extends BaseTest {
     }
 
     @Test
+    public void continueOnBatchError() throws SQLException {
+        continueOnBatchError(true, 10);
+        continueOnBatchError(false, 6);
+    }
+
+    private void continueOnBatchError(boolean continueBatch, int waitedResult) throws SQLException {
+        createTable("MultiTestt9", "id char(1)");
+        try (Connection connection = setConnection("&continueBatchOnError="+continueBatch)) {
+            PreparedStatement pstmt = connection.prepareStatement("INSERT IGNORE INTO MultiTestt9 (id) VALUES (?)");
+            for (int i = 0; i < 10 ; i++) {
+                pstmt.setString(1, (i == 5) ? "aaa" : "" + i);
+                pstmt.addBatch();
+            }
+            try {
+                pstmt.executeBatch();
+                fail("Must have thrown SQLException");
+            } catch (SQLException e) {
+                ResultSet rs = connection.createStatement().executeQuery("SELECT COUNT(*) FROM MultiTestt9");
+                if (rs.next()) {
+                    assertEquals(waitedResult, rs.getInt(1));
+                } else {
+                    fail("Must have one result");
+                }
+            }
+        }
+    }
+
+    @Test
     public void rewriteSelectQuery() throws Throwable {
         Statement st = sharedConnection.createStatement();
         st.execute("INSERT INTO MultiTesttselect2 VALUES (1)");

@@ -31,6 +31,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.sql.*;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /*
@@ -743,17 +744,29 @@ public class AbstractQueryProtocol extends AbstractConnectProtocol implements Pr
             return null;
         }
 
-        CachedSelectResult resultSet = (CachedSelectResult) executeQuery(new MariaDbQuery("show warnings"));
+        MariaSelectResultSet resultSet = (MariaSelectResultSet) executeQuery(new MariaDbQuery("show warnings"));
         // returned result set has 'level', 'code' and 'message' columns, in this order.
+        try {
         while (resultSet.next()) {
-            int code = resultSet.getValueObject(1).getInt();
+            int code = resultSet.getValueObject(2).getInt();
             if (code == 1264            // Out of range value for column
                     || code == 1265     // Data truncated for column
                     || code == 1406) {  // Data too long for column
-                String message = resultSet.getValueObject(2).getString();
+                String message = resultSet.getValueObject(3).getString();
                 return new SQLWarning(message, ExceptionMapper.mapCodeToSqlState(code), code);
             }
         }
+        } catch (SQLException sqle) {
+            throw new QueryException("could not load system variables", -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), sqle);
+        } finally {
+                try {
+                    resultSet.close();
+                } catch (SQLException sqlException) {
+                    //eat exception
+                }
+        }
+
         return null;
     }
+
 }

@@ -213,7 +213,7 @@ public abstract class BaseReplication extends BaseMultiHostTest {
         for (int i = 0; i < 20; i++) {
             try {
                 connection = getNewConnection(false);
-                assureBlackList(connection);
+                assureBlackList();
                 int serverId = getServerId(connection);
                 if (i > 0) {
                     Assert.assertTrue(masterId == serverId);
