@@ -64,6 +64,7 @@ import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.regex.Pattern;
 
 /**
  * Contains the raw value returned from the server.
@@ -71,6 +72,8 @@ import java.util.Calendar;
  */
 @SuppressWarnings("deprecation")
 public class MariaDbValueObject implements ValueObject {
+
+    private static final Pattern isIntegerRegex = Pattern.compile("^-?\\d+\\.0+$");
     private final byte[] rawBytes;
     private final MariaDbType dataType;
     private final boolean isBinaryEncoded;
@@ -107,7 +110,7 @@ public class MariaDbValueObject implements ValueObject {
     }
 
 
-    public String getString() {
+    public String getString() throws SQLException {
         return getString(null);
     }
 
@@ -116,17 +119,48 @@ public class MariaDbValueObject implements ValueObject {
      * @param cal session calendar
      * @return string
      */
-    public String getString(Calendar cal) {
+    public String getString(Calendar cal) throws SQLException {
         if (rawBytes == null) {
             return null;
         }
 
         switch (columnInfo.getType()) {
             case BIT:
-                if (columnInfo.getLength() == 1) {
+                if (options.tinyInt1isBit && columnInfo.getLength() == 1) {
                     return (rawBytes[0] == 0) ? "0" : "1";
                 }
                 break;
+            case TINYINT:
+                if (options.tinyInt1isBit && columnInfo.getLength() == 1) {
+                    return (rawBytes[0] == 0) ? "0" : "1";
+                }
+                if (this.isBinaryEncoded) {
+                    return String.valueOf(getTinyInt());
+                }
+                break;
+            case SMALLINT:
+                if (this.isBinaryEncoded) {
+                    return String.valueOf(getSmallInt());
+                }
+                break;
+            case INTEGER:
+            case MEDIUMINT:
+                if (this.isBinaryEncoded) {
+                    return String.valueOf(getMediumInt());
+                }
+                break;
+            case BIGINT:
+                if (this.isBinaryEncoded) {
+                    if (!columnInfo.isSigned()) {
+                        return String.valueOf(getBigInteger());
+                    }
+                    return String.valueOf(getLong());
+                }
+                break;
+            case DOUBLE:
+                return String.valueOf(getDouble());
+            case FLOAT:
+                return String.valueOf(getFloat());
             case TIME:
                 return getTimeString();
             case DATE:
@@ -137,17 +171,39 @@ public class MariaDbValueObject implements ValueObject {
                     }
                 }
                 break;
-            case TIMESTAMP:
-            case DATETIME:
-                if (isBinaryEncoded) {
+            case YEAR:
+                if (options.yearIsDateType) {
                     try {
-                        return getTimestamp(cal).toString();
+                        return getDate(cal).toString();
                     } catch (ParseException e) {
+                        //eat exception
                     }
                 }
+                if (this.isBinaryEncoded) {
+                    return String.valueOf(getSmallInt());
+                }
                 break;
+            case TIMESTAMP:
+            case DATETIME:
+                try {
+                    return getTimestamp(cal).toString();
+                } catch (ParseException e) {
+                }
+                break;
+            case DECIMAL:
+                return getBigDecimal().toString();
+            case BLOB:
+            case LONGBLOB:
+            case MEDIUMBLOB:
+            case TINYBLOB:
+            case GEOMETRY:
+                return new String(getBytes());
+            case NULL:
+                return null;
+            case OLDDECIMAL:
+                return getBigDecimal().toString();
             default:
-                break;
+                return new String(rawBytes, StandardCharsets.UTF_8);
         }
         return new String(rawBytes, StandardCharsets.UTF_8);
     }
@@ -212,11 +268,13 @@ public class MariaDbValueObject implements ValueObject {
         return (negative ? "-" : "") + (hourString + ":" + minuteString + ":" + secondString);
     }
 
+
+
     /**
      * Get byte from raw data.
      * @return byte
      */
-    public byte getByte() {
+    public byte getByte() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
@@ -224,54 +282,110 @@ public class MariaDbValueObject implements ValueObject {
             if (dataType == MariaDbType.BIT) {
                 return rawBytes[0];
             }
-            try {
-                return Byte.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-            } catch (NumberFormatException nfe) {
-                BigDecimal value = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                if (value.compareTo(BigDecimal.valueOf(Byte.MIN_VALUE)) < 0) {
-                    return Byte.MIN_VALUE;
-                }
-                if (value.compareTo(BigDecimal.valueOf(Byte.MAX_VALUE)) > 0) {
-                    return Byte.MAX_VALUE;
-                }
-                return value.byteValue();
-            }
+            return parseByte();
         } else {
+            long value;
             switch (dataType) {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    if (columnInfo.isSigned()) {
-                        return rawBytes[0];
-                    } else {
-                        return (byte) (rawBytes[0] & 0xff);
-                    }
+                    value = getTinyInt();
+                    break;
                 case SMALLINT:
                 case YEAR:
-                    return (byte) getShort();
+                    value = getSmallInt();
+                    break;
                 case INTEGER:
                 case MEDIUMINT:
-                    return (byte) getInt();
+                    value = getMediumInt();
+                    break;
                 case BIGINT:
-                    return (byte) getLong();
+                    value = getLong();
+                    break;
                 case FLOAT:
-                    return (byte) getFloat();
+                    value = (long) getFloat();
+                    break;
                 case DOUBLE:
-                    return (byte) getDouble();
+                    value = (long) getDouble();
+                    break;
                 default:
-                    try {
-                        return Byte.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-                    } catch (NumberFormatException nfe) {
-                        BigDecimal value = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                        if (value.compareTo(BigDecimal.valueOf(Byte.MIN_VALUE)) < 0) {
-                            return Byte.MIN_VALUE;
-                        }
-                        if (value.compareTo(BigDecimal.valueOf(Byte.MAX_VALUE)) > 0) {
-                            return Byte.MAX_VALUE;
-                        }
-                        return value.byteValue();
-                    }
+                    return parseByte();
             }
+            rangeCheck(Byte.class, Byte.MIN_VALUE, Byte.MAX_VALUE, value);
+            return (byte) value;
+        }
+    }
+
+    private void rangeCheck(Object className, long minValue, long maxValue, long value) throws SQLException {
+        if (value < minValue || value > maxValue) {
+            throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value + " is not in "
+                    + className + " range", "22003", 1264);
+        }
+    }
+
+    private int getTinyInt() throws SQLException {
+        int value = rawBytes[0];
+        if (!columnInfo.isSigned()) {
+            value = (rawBytes[0] & 0xff);
+        }
+        return value;
+    }
+
+    private int getSmallInt() throws SQLException {
+        int value = ((rawBytes[0] & 0xff) | ((rawBytes[1] & 0xff) << 8));
+        if (!columnInfo.isSigned()) {
+            value = value & 0xffff;
+        }
+        return value;
+    }
+
+    private long getMediumInt() throws SQLException {
+        long value = ((rawBytes[0] & 0xff)
+                | (rawBytes[1] & 0xff) << 8
+                | (rawBytes[2] & 0xff) << 16
+                | (rawBytes[3] & 0xff) << 24);
+        if (!columnInfo.isSigned()) {
+            value = value & 0xffffffffL ;
+        }
+        return value;
+    }
+
+
+    private byte parseByte() throws SQLException {
+        String value = new String(rawBytes, StandardCharsets.UTF_8);
+        try {
+            switch (dataType) {
+                case FLOAT:
+                    Float floatValue = Float.valueOf(value);
+                    if (floatValue.compareTo((float) Byte.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Byte range", "22003", 1264);
+                    }
+                    return floatValue.byteValue();
+                case DOUBLE:
+                    Double doubleValue = Double.valueOf(value);
+                    if (doubleValue.compareTo((double) Byte.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Byte range", "22003", 1264);
+                    }
+                    return doubleValue.byteValue();
+                default:
+                    return Byte.parseByte(value);
+            }
+        } catch (NumberFormatException nfe) {
+            //parse error.
+            //if this is a decimal with only "0" in decimal, like "1.0000" (can be the case if trying to getByte with a database decimal value
+            //retrying without the decimal part.
+            if (isIntegerRegex.matcher(value).find()) {
+                try {
+                    return Byte.parseByte(value.substring(0, value.indexOf(".")));
+                } catch (NumberFormatException nfee) {
+                    //eat exception
+                }
+            }
+            throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                    + " is not in Byte range",
+                    "22003", 1264);
         }
     }
 
@@ -279,60 +393,83 @@ public class MariaDbValueObject implements ValueObject {
      * Get short from raw data.
      * @return short
      */
-    public short getShort() {
+    public short getShort() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
         if (!this.isBinaryEncoded) {
-            try {
-                return Short.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-            } catch (NumberFormatException nfe) {
-                BigDecimal value = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                if (value.compareTo(BigDecimal.valueOf(Short.MIN_VALUE)) < 0) {
-                    return Short.MIN_VALUE;
-                }
-                if (value.compareTo(BigDecimal.valueOf(Short.MAX_VALUE)) > 0) {
-                    return Short.MAX_VALUE;
-                }
-                return value.shortValue();
-            }
+            return parseShort();
         } else {
+            long value;
             switch (dataType) {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    return getByte();
+                    value = getTinyInt();
+                    break;
                 case SMALLINT:
                 case YEAR:
-                    short value = (short) ((rawBytes[0] & 0xff) | ((rawBytes[1] & 0xff) << 8));
+                    value = ((rawBytes[0] & 0xff) | ((rawBytes[1] & 0xff) << 8));
                     if (columnInfo.isSigned()) {
-                        return value;
-                    } else {
-                        return (short) (value & 0xffff);
+                        return (short) value;
                     }
+                    value = value & 0xffff;
+                    break;
                 case INTEGER:
                 case MEDIUMINT:
-                    return (short) getInt();
+                    value = getMediumInt();
+                    break;
                 case BIGINT:
-                    return (short) getLong();
+                    value = getLong();
+                    break;
                 case FLOAT:
-                    return (short) getFloat();
+                    value = (long) getFloat();
+                    break;
                 case DOUBLE:
-                    return (short) getDouble();
+                    value = (long) getDouble();
+                    break;
                 default:
-                    try {
-                        return Short.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-                    } catch (NumberFormatException nfe) {
-                        BigDecimal bigdecimal = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Short.MIN_VALUE)) < 0) {
-                            return Short.MIN_VALUE;
-                        }
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Short.MAX_VALUE)) > 0) {
-                            return Short.MAX_VALUE;
-                        }
-                        return bigdecimal.shortValue();
-                    }
+                    return parseShort();
             }
+            rangeCheck(Short.class, Short.MIN_VALUE, Short.MAX_VALUE, value);
+            return (short) value;
+        }
+    }
+
+    private short parseShort() throws SQLException {
+        String value = new String(rawBytes, StandardCharsets.UTF_8);
+        try {
+            switch (dataType) {
+                case FLOAT:
+                    Float floatValue = Float.valueOf(value);
+                    if (floatValue.compareTo((float) Short.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Short range", "22003", 1264);
+                    }
+                    return floatValue.shortValue();
+                case DOUBLE:
+                    Double doubleValue = Double.valueOf(value);
+                    if (doubleValue.compareTo((double) Short.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Short range", "22003", 1264);
+                    }
+                    return doubleValue.shortValue();
+                default:
+                    return Short.parseShort(value);
+            }
+        } catch (NumberFormatException nfe) {
+            //parse error.
+            //if this is a decimal with only "0" in decimal, like "1.0000" (can be the case if trying to getInt with a database decimal value
+            //retrying without the decimal part.
+            if (isIntegerRegex.matcher(value).find()) {
+                try {
+                    return Short.parseShort(value.substring(0, value.indexOf(".")));
+                } catch (NumberFormatException numberFormatException) {
+                    //eat exception
+                }
+            }
+            throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                    + " is not in Short range", "22003", 1264);
         }
     }
 
@@ -340,63 +477,87 @@ public class MariaDbValueObject implements ValueObject {
      * Get int from raw data.
      * @return int
      */
-    public int getInt() {
+    public int getInt() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
         if (!this.isBinaryEncoded) {
-            try {
-                return Integer.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-            } catch (NumberFormatException nfe) {
-                BigDecimal value = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                if (value.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0) {
-                    return Integer.MIN_VALUE;
-                }
-                if (value.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
-                    return Integer.MAX_VALUE;
-                }
-                return value.intValue();
-            }
+            return parseInt();
         } else {
+            long value;
             switch (dataType) {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    return getByte();
+                    value = getTinyInt();
+                    break;
                 case SMALLINT:
                 case YEAR:
-                    return getShort();
+                    value = getSmallInt();
+                    break;
                 case INTEGER:
                 case MEDIUMINT:
-                    int value = ((rawBytes[0] & 0xff)
+                    value = ((rawBytes[0] & 0xff)
                             | (rawBytes[1] & 0xff) << 8
                             | (rawBytes[2] & 0xff) << 16
                             | (rawBytes[3] & 0xff) << 24);
                     if (columnInfo.isSigned()) {
-                        return value;
-                    } else {
-                        return (value & 0xffffffff);
+                        return (int) value;
+                    } else if (value < 0) {
+                        value = value & 0xffffffffL;
                     }
+                    break;
                 case BIGINT:
-                    return (int) getLong();
+                    value = getLong();
+                    break;
                 case FLOAT:
-                    return (int) getFloat();
+                    value = (long) getFloat();
+                    break;
                 case DOUBLE:
-                    return (int) getDouble();
+                    value = (long) getDouble();
+                    break;
                 default:
-                    try {
-                        return Integer.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-                    } catch (NumberFormatException nfe) {
-                        BigDecimal bigdecimal = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Integer.MIN_VALUE)) < 0) {
-                            return Integer.MIN_VALUE;
-                        }
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0) {
-                            return Integer.MAX_VALUE;
-                        }
-                        return bigdecimal.intValue();
-                    }
+                    return parseInt();
             }
+            rangeCheck(Integer.class, Integer.MIN_VALUE, Integer.MAX_VALUE, value);
+            return (int) value;
+        }
+    }
+
+    private int parseInt() throws SQLException {
+        String value = new String(rawBytes, StandardCharsets.UTF_8);
+        try {
+            switch (dataType) {
+                case FLOAT:
+                    Float floatValue = Float.valueOf(value);
+                    if (floatValue.compareTo((float) Integer.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Integer range", "22003", 1264);
+                    }
+                    return floatValue.intValue();
+                case DOUBLE:
+                    Double doubleValue = Double.valueOf(value);
+                    if (doubleValue.compareTo((double) Integer.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Integer range", "22003", 1264);
+                    }
+                    return doubleValue.intValue();
+                default:
+                    return Integer.parseInt(value);
+            }
+        } catch (NumberFormatException nfe) {
+            //parse error.
+            //if this is a decimal with only "0" in decimal, like "1.0000" (can be the case if trying to getInt with a database decimal value
+            //retrying without the decimal part.
+            if (isIntegerRegex.matcher(value).find()) {
+                try {
+                    return Integer.parseInt(value.substring(0, value.indexOf(".")));
+                } catch (NumberFormatException numberFormatException) {
+                    //eat exception
+                }
+            }
+            throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                    + " is not in Integer range", "22003", 1264);
         }
     }
 
@@ -404,71 +565,107 @@ public class MariaDbValueObject implements ValueObject {
      * Get long from raw data.
      * @return long
      */
-    public long getLong() {
+    public long getLong() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
         if (!this.isBinaryEncoded) {
-            try {
-                return Long.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-            } catch (NumberFormatException nfe) {
-                BigDecimal bigdecimal = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                if (bigdecimal.compareTo(BigDecimal.valueOf(Long.MIN_VALUE)) < 0) {
-                    return Long.MIN_VALUE;
-                }
-                if (bigdecimal.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) {
-                    return Long.MAX_VALUE;
-                }
-                return bigdecimal.longValue();
-            }
+            return parseLong();
         } else {
+            long value;
             switch (dataType) {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    return getByte();
+                    value = getTinyInt();
+                    break;
                 case SMALLINT:
                 case YEAR:
-                    return getShort();
+                    value = getSmallInt();
+                    break;
                 case INTEGER:
                 case MEDIUMINT:
-                    return getInt();
+                    value = getMediumInt();
+                    break;
                 case BIGINT:
-                    long value = ((rawBytes[0] & 0xff)
+                    value = ((rawBytes[0] & 0xff)
                             | ((long) (rawBytes[1] & 0xff) << 8)
                             | ((long) (rawBytes[2] & 0xff) << 16)
                             | ((long) (rawBytes[3] & 0xff) << 24)
                             | ((long) (rawBytes[4] & 0xff) << 32)
                             | ((long) (rawBytes[5] & 0xff) << 40)
                             | ((long) (rawBytes[6] & 0xff) << 48)
-                            | ((long) (rawBytes[7] & 0xff) << 56)
-                    );
+                            | ((long) (rawBytes[7] & 0xff) << 56));
                     if (columnInfo.isSigned()) {
                         return value;
-                    } else {
-                        return new BigInteger(1, new byte[]{(byte) (value >> 56),
-                                (byte) (value >> 48), (byte) (value >> 40), (byte) (value >> 32),
-                                (byte) (value >> 24), (byte) (value >> 16), (byte) (value >> 8),
-                                (byte) (value >> 0)}).longValue();
                     }
+                    BigInteger unsignedValue = new BigInteger(1, new byte[]{(byte) (value >> 56),
+                            (byte) (value >> 48), (byte) (value >> 40), (byte) (value >> 32),
+                            (byte) (value >> 24), (byte) (value >> 16), (byte) (value >> 8),
+                            (byte) (value >> 0)});
+                    if (unsignedValue.compareTo(new BigInteger(String.valueOf(Long.MAX_VALUE))) > 0) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value "
+                                + unsignedValue + " is not in Long range", "22003", 1264);
+                    }
+                    return unsignedValue.longValue();
                 case FLOAT:
-                    return (long) getFloat();
-                case DOUBLE:
-                    return (long) getDouble();
-                default:
-                    try {
-                        return Long.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
-                    } catch (NumberFormatException nfe) {
-                        BigDecimal bigdecimal = new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Long.MIN_VALUE)) < 0) {
-                            return Long.MIN_VALUE;
-                        }
-                        if (bigdecimal.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) > 0) {
-                            return Long.MAX_VALUE;
-                        }
-                        return bigdecimal.longValue();
+                    Float floatValue = getFloat();
+                    if (floatValue.compareTo((float) Long.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + floatValue
+                                + " is not in Long range", "22003", 1264);
                     }
+                    return floatValue.longValue();
+                case DOUBLE:
+                    Double doubleValue = getDouble();
+                    if (doubleValue.compareTo((double) Long.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + doubleValue
+                                + " is not in Long range", "22003", 1264);
+                    }
+                    return doubleValue.longValue();
+                default:
+                    return parseLong();
             }
+            rangeCheck(Long.class, Long.MIN_VALUE, Long.MAX_VALUE, value);
+            return value;
+
+        }
+    }
+
+    private long parseLong() throws SQLException {
+        String value = new String(rawBytes, StandardCharsets.UTF_8);
+        try {
+            switch (dataType) {
+                case FLOAT:
+                    Float floatValue = Float.valueOf(value);
+                    if (floatValue.compareTo((float) Long.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Long range", "22003", 1264);
+                    }
+                    return floatValue.longValue();
+                case DOUBLE:
+                    Double doubleValue = Double.valueOf(value);
+                    if (doubleValue.compareTo((double) Long.MAX_VALUE) >= 1) {
+                        throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                                + " is not in Long range", "22003", 1264);
+                    }
+                    return doubleValue.longValue();
+                default:
+                    return Long.parseLong(value);
+            }
+
+        } catch (NumberFormatException nfe) {
+            //parse error.
+            //if this is a decimal with only "0" in decimal, like "1.0000" (can be the case if trying to getlong with a database decimal value
+            //retrying without the decimal part.
+            if (isIntegerRegex.matcher(value).find()) {
+                try {
+                    return Long.parseLong(value.substring(0, value.indexOf(".")));
+                } catch (NumberFormatException nfee) {
+                    //eat exception
+                }
+            }
+            throw new SQLException("Out of range value for column '" + columnInfo.getName() + "' : value " + value
+                    + " is not in Long range", "22003", 1264);
         }
     }
 
@@ -476,37 +673,57 @@ public class MariaDbValueObject implements ValueObject {
      * Get float from raw data.
      * @return float
      */
-    public float getFloat() {
+    public float getFloat() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
         if (!this.isBinaryEncoded) {
             return Float.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
         } else {
+            long value;
             switch (dataType) {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    return getByte();
+                    value = getTinyInt();
+                    break;
                 case SMALLINT:
                 case YEAR:
-                    return getShort();
+                    value = getSmallInt();
+                    break;
                 case INTEGER:
                 case MEDIUMINT:
-                    return getInt();
+                    value = getMediumInt();
+                    break;
                 case BIGINT:
-                    return getLong();
+                    value = ((rawBytes[0] & 0xff)
+                            | ((long) (rawBytes[1] & 0xff) << 8)
+                            | ((long) (rawBytes[2] & 0xff) << 16)
+                            | ((long) (rawBytes[3] & 0xff) << 24)
+                            | ((long) (rawBytes[4] & 0xff) << 32)
+                            | ((long) (rawBytes[5] & 0xff) << 40)
+                            | ((long) (rawBytes[6] & 0xff) << 48)
+                            | ((long) (rawBytes[7] & 0xff) << 56));
+                    if (columnInfo.isSigned()) {
+                        return value;
+                    }
+                    BigInteger unsignedValue = new BigInteger(1, new byte[]{(byte) (value >> 56),
+                            (byte) (value >> 48), (byte) (value >> 40), (byte) (value >> 32),
+                            (byte) (value >> 24), (byte) (value >> 16), (byte) (value >> 8),
+                            (byte) (value >> 0)});
+                    return unsignedValue.floatValue();
                 case FLOAT:
-                    int value = ((rawBytes[0] & 0xff)
+                    int valueFloat = ((rawBytes[0] & 0xff)
                             | (rawBytes[1] & 0xff) << 8
                             | (rawBytes[2] & 0xff) << 16
                             | (rawBytes[3] & 0xff) << 24);
-                    return Float.intBitsToFloat(value);
+                    return Float.intBitsToFloat(valueFloat);
                 case DOUBLE:
                     return (float) getDouble();
                 default:
                     return Float.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
             }
+            return Float.valueOf(String.valueOf(value));
         }
     }
 
@@ -514,7 +731,7 @@ public class MariaDbValueObject implements ValueObject {
      * Get double value from raw data.
      * @return double
      */
-    public double getDouble() {
+    public double getDouble() throws SQLException {
         if (rawBytes == null) {
             return 0;
         }
@@ -525,19 +742,35 @@ public class MariaDbValueObject implements ValueObject {
                 case BIT:
                     return rawBytes[0];
                 case TINYINT:
-                    return getByte();
+                    return getTinyInt();
                 case SMALLINT:
                 case YEAR:
-                    return getShort();
+                    return getSmallInt();
                 case INTEGER:
                 case MEDIUMINT:
-                    return getInt();
+                    return getMediumInt();
                 case BIGINT:
-                    return getLong();
+                    long valueLong = ((rawBytes[0] & 0xff)
+                            | ((long) (rawBytes[1] & 0xff) << 8)
+                            | ((long) (rawBytes[2] & 0xff) << 16)
+                            | ((long) (rawBytes[3] & 0xff) << 24)
+                            | ((long) (rawBytes[4] & 0xff) << 32)
+                            | ((long) (rawBytes[5] & 0xff) << 40)
+                            | ((long) (rawBytes[6] & 0xff) << 48)
+                            | ((long) (rawBytes[7] & 0xff) << 56)
+                    );
+                    if (columnInfo.isSigned()) {
+                        return valueLong;
+                    } else {
+                        return new BigInteger(1, new byte[]{(byte) (valueLong >> 56),
+                                (byte) (valueLong >> 48), (byte) (valueLong >> 40), (byte) (valueLong >> 32),
+                                (byte) (valueLong >> 24), (byte) (valueLong >> 16), (byte) (valueLong >> 8),
+                                (byte) (valueLong >> 0)}).doubleValue();
+                    }
                 case FLOAT:
                     return getFloat();
                 case DOUBLE:
-                    long value = ((rawBytes[0] & 0xff)
+                    long valueDouble = ((rawBytes[0] & 0xff)
                             | ((long) (rawBytes[1] & 0xff) << 8)
                             | ((long) (rawBytes[2] & 0xff) << 16)
                             | ((long) (rawBytes[3] & 0xff) << 24)
@@ -545,7 +778,7 @@ public class MariaDbValueObject implements ValueObject {
                             | ((long) (rawBytes[5] & 0xff) << 40)
                             | ((long) (rawBytes[6] & 0xff) << 48)
                             | ((long) (rawBytes[7] & 0xff) << 56));
-                    return Double.longBitsToDouble(value);
+                    return Double.longBitsToDouble(valueDouble);
                 default:
                     return Double.valueOf(new String(rawBytes, StandardCharsets.UTF_8));
             }
@@ -556,7 +789,7 @@ public class MariaDbValueObject implements ValueObject {
      * Get BigDecimal from rax data.
      * @return Bigdecimal value
      */
-    public BigDecimal getBigDecimal() {
+    public BigDecimal getBigDecimal() throws SQLException {
         if (rawBytes == null) {
             return null;
         }
@@ -567,13 +800,13 @@ public class MariaDbValueObject implements ValueObject {
                 case BIT:
                     return BigDecimal.valueOf((long) rawBytes[0]);
                 case TINYINT:
-                    return BigDecimal.valueOf((long) getByte());
+                    return BigDecimal.valueOf((long) getTinyInt());
                 case SMALLINT:
                 case YEAR:
-                    return BigDecimal.valueOf(getShort());
+                    return BigDecimal.valueOf((long) getSmallInt());
                 case INTEGER:
                 case MEDIUMINT:
-                    return BigDecimal.valueOf((long) getInt());
+                    return BigDecimal.valueOf(getMediumInt());
                 case BIGINT:
                     long value = ((rawBytes[0] & 0xff)
                             | ((long) (rawBytes[1] & 0xff) << 8)
@@ -593,9 +826,9 @@ public class MariaDbValueObject implements ValueObject {
                                 (byte) (value >> 0)}))).setScale(columnInfo.getDecimals());
                     }
                 case FLOAT:
-                    return BigDecimal.valueOf((long) getFloat());
+                    return BigDecimal.valueOf(getFloat());
                 case DOUBLE:
-                    return BigDecimal.valueOf((long) getDouble());
+                    return BigDecimal.valueOf(getDouble());
                 default:
                     return new BigDecimal(new String(rawBytes, StandardCharsets.UTF_8));
             }
@@ -611,7 +844,7 @@ public class MariaDbValueObject implements ValueObject {
      * Get BigInteger from raw data.
      * @return bigInteger
      */
-    public BigInteger getBigInteger() {
+    public BigInteger getBigInteger() throws SQLException {
         if (rawBytes == null) {
             return null;
         }
@@ -622,13 +855,18 @@ public class MariaDbValueObject implements ValueObject {
                 case BIT:
                     return BigInteger.valueOf((long) rawBytes[0]);
                 case TINYINT:
-                    return BigInteger.valueOf((long) getByte());
+                    return BigInteger.valueOf((long) (columnInfo.isSigned() ? getByte() : (rawBytes[0] & 0xff)));
                 case SMALLINT:
                 case YEAR:
-                    return BigInteger.valueOf(getShort());
+                    short valueShort = (short) ((rawBytes[0] & 0xff) | ((rawBytes[1] & 0xff) << 8));
+                    return BigInteger.valueOf((long) (columnInfo.isSigned() ? valueShort : (valueShort & 0xffff)));
                 case INTEGER:
                 case MEDIUMINT:
-                    return BigInteger.valueOf((long) getInt());
+                    int valueInt = ((rawBytes[0] & 0xff)
+                            | (rawBytes[1] & 0xff) << 8
+                            | (rawBytes[2] & 0xff) << 16
+                            | (rawBytes[3] & 0xff) << 24);
+                    return BigInteger.valueOf(((columnInfo.isSigned()) ? valueInt : (valueInt >= 0) ? valueInt : valueInt & 0xffffffffL));
                 case BIGINT:
                     long value = ((rawBytes[0] & 0xff)
                             | ((long) (rawBytes[1] & 0xff) << 8)
@@ -710,7 +948,7 @@ public class MariaDbValueObject implements ValueObject {
             java.util.Date utilDate = sdf.parse(rawValue);
             return new Date(utilDate.getTime());
         } else {
-            return binaryDate();
+            return binaryDate(cal);
         }
     }
 
@@ -733,6 +971,11 @@ public class MariaDbValueObject implements ValueObject {
         if (!this.isBinaryEncoded) {
             if (dataType == MariaDbType.TIMESTAMP || dataType == MariaDbType.DATETIME) {
                 return new Time(getTimestamp(cal).getTime());
+            } else if (dataType == MariaDbType.DATE) {
+                Calendar zeroCal = Calendar.getInstance();
+                zeroCal.set(1970, 0, 1, 0, 0, 0);
+                zeroCal.set(Calendar.MILLISECOND, 0);
+                return new Time(zeroCal.getTimeInMillis());
             } else {
                 if (!options.useLegacyDatetimeCode && (raw.startsWith("-") || raw.split(":").length != 3 || raw.indexOf(":") > 3)) {
                     throw new ParseException("Time format \"" + raw + "\" incorrect, must be HH:mm:ss", 0);
@@ -761,68 +1004,88 @@ public class MariaDbValueObject implements ValueObject {
                 }
             }
         } else {
-            return binaryTime();
+            return binaryTime(cal);
         }
     }
 
-    private Date binaryDate() throws ParseException {
-        if (rawBytes.length == 0) {
-            return null;
+    private Date binaryDate(Calendar cal) throws ParseException {
+        switch (dataType) {
+            case TIMESTAMP:
+            case DATETIME:
+                return new Date(getTimestamp(cal).getTime());
+            default:
+                if (rawBytes.length == 0) {
+                    return null;
+                }
+                int year;
+                int month;
+                int day;
+
+                year = ((rawBytes[0] & 0xff) | (rawBytes[1] & 0xff) << 8);
+                month = rawBytes[2];
+                day = rawBytes[3];
+
+                Calendar calendar = Calendar.getInstance();
+                /*if (!options.useLegacyDatetimeCode) {
+                    c = cal;
+                }*/
+
+                Date dt;
+                synchronized (calendar) {
+                    calendar.clear();
+                    calendar.set(Calendar.YEAR, year);
+                    calendar.set(Calendar.MONTH, month - 1);
+                    calendar.set(Calendar.DAY_OF_MONTH, day);
+                    calendar.set(Calendar.HOUR_OF_DAY, 0);
+                    calendar.set(Calendar.MINUTE, 0);
+                    calendar.set(Calendar.SECOND, 0);
+                    calendar.set(Calendar.MILLISECOND, 0);
+                    dt = new Date(calendar.getTimeInMillis());
+                }
+                return dt;
         }
-        int year;
-        int month;
-        int day;
-
-        year = ((rawBytes[0] & 0xff) | (rawBytes[1] & 0xff) << 8);
-        month = rawBytes[2];
-        day = rawBytes[3];
-
-        Calendar calendar = Calendar.getInstance();
-        /*if (!options.useLegacyDatetimeCode) {
-            c = cal;
-        }*/
-
-        Date dt;
-        synchronized (calendar) {
-            calendar.clear();
-            calendar.set(Calendar.YEAR, year);
-            calendar.set(Calendar.MONTH, month - 1);
-            calendar.set(Calendar.DAY_OF_MONTH, day);
-            calendar.set(Calendar.HOUR_OF_DAY, 0);
-            calendar.set(Calendar.MINUTE, 0);
-            calendar.set(Calendar.SECOND, 0);
-            calendar.set(Calendar.MILLISECOND, 0);
-            dt = new Date(calendar.getTimeInMillis());
-        }
-        return dt;
     }
 
-    private Time binaryTime() {
-        if (rawBytes.length == 0) {
-            return null;
+    private Time binaryTime(Calendar cal) throws ParseException {
+        switch (dataType) {
+            case TIMESTAMP:
+            case DATETIME:
+                Timestamp ts = binaryTimestamp(cal);
+                return new Time(ts.getTime());
+            case DATE:
+                Calendar tmpCalendar = Calendar.getInstance();
+                tmpCalendar.clear();
+                tmpCalendar.set(1970, 0, 1, 0, 0, 0);
+                tmpCalendar.set(Calendar.MILLISECOND, 0);
+                return new Time(tmpCalendar.getTimeInMillis());
+            default:
+                Calendar calendar = Calendar.getInstance();
+                calendar.clear();
+                if (options.useLegacyDatetimeCode) {
+                    calendar.setLenient(false);
+                }
+                int hour = 0;
+                int minutes = 0;
+                int seconds = 0;
+                if (rawBytes.length > 7) {
+                    hour = rawBytes[5];
+                    minutes = rawBytes[6];
+                    seconds = rawBytes[7];
+                }
+                calendar.set(1970, 0, 1, hour, minutes, seconds);
+
+                int nanoseconds = 0;
+                if (rawBytes.length > 8) {
+                    nanoseconds = ((rawBytes[8] & 0xff)
+                            | (rawBytes[9] & 0xff) << 8
+                            | (rawBytes[10] & 0xff) << 16
+                            | (rawBytes[11] & 0xff) << 24);
+                }
+
+                calendar.set(Calendar.MILLISECOND, nanoseconds / 1000);
+
+                return new Time(calendar.getTimeInMillis());
         }
-
-        Calendar calendar = Calendar.getInstance();
-        calendar.clear();
-        if (options.useLegacyDatetimeCode) {
-            calendar.setLenient(false);
-        }
-        int hour = rawBytes[5];
-        int minutes = rawBytes[6];
-        int seconds = rawBytes[7];
-        calendar.set(1970, 0, 1, hour, minutes, seconds);
-
-        int nanoseconds = 0;
-        if (rawBytes.length > 8) {
-            nanoseconds = ((rawBytes[8] & 0xff)
-                    | (rawBytes[9] & 0xff) << 8
-                    | (rawBytes[10] & 0xff) << 16
-                    | (rawBytes[11] & 0xff) << 24);
-        }
-
-        calendar.set(Calendar.MILLISECOND, nanoseconds / 1000);
-
-        return new Time(calendar.getTimeInMillis());
     }
 
 
@@ -922,12 +1185,18 @@ public class MariaDbValueObject implements ValueObject {
                     return dateTimestamps;
                 default:
                     try {
+                        int hour = 0;
+                        int minutes = 0;
+                        int seconds = 0;
+
                         int year = Integer.parseInt(rawValue.substring(0, 4));
                         int month = Integer.parseInt(rawValue.substring(5, 7));
                         int day = Integer.parseInt(rawValue.substring(8, 10));
-                        int hour = Integer.parseInt(rawValue.substring(11, 13));
-                        int minutes = Integer.parseInt(rawValue.substring(14, 16));
-                        int seconds = Integer.parseInt(rawValue.substring(17, 19));
+                        if (rawValue.length() >= 19) {
+                            hour = Integer.parseInt(rawValue.substring(11, 13));
+                            minutes = Integer.parseInt(rawValue.substring(14, 16));
+                            seconds = Integer.parseInt(rawValue.substring(17, 19));
+                        }
                         int nanoseconds = extractNanos(rawValue);
                         Timestamp timestamp;
                         Calendar calendar = cal;
@@ -989,7 +1258,7 @@ public class MariaDbValueObject implements ValueObject {
             return false;
         }
         final String rawVal = new String(rawBytes, StandardCharsets.UTF_8);
-        return rawVal.equalsIgnoreCase("true") || rawVal.equalsIgnoreCase("1") || (rawBytes[0] & 0x1) == 1;
+        return rawVal.equalsIgnoreCase("true") || rawVal.equals("1") || (rawBytes[0] & 0x1) == 1;
     }
 
     /**
@@ -1042,15 +1311,16 @@ public class MariaDbValueObject implements ValueObject {
 
     /**
      * Get object value.
-     * @param datatypeMappingFlags dataTypeflag (year is date or int, bit boolean or int,  ...)
+     * @param dataTypeMappingFlags dataTypeflag (year is date or int, bit boolean or int,  ...)
      * @param cal session calendar
      * @return the object value.
      * @throws ParseException if data cannot be parse
      */
-    public Object getObject(int datatypeMappingFlags, Calendar cal) throws ParseException {
-        if (this.getBytes() == null) {
+    public Object getObject(int dataTypeMappingFlags, Calendar cal) throws SQLException, ParseException {
+        if (rawBytes == null) {
             return null;
         }
+
         switch (dataType) {
             case BIT:
                 if (columnInfo.getLength() == 1) {
@@ -1058,7 +1328,7 @@ public class MariaDbValueObject implements ValueObject {
                 }
                 return getBytes();
             case TINYINT:
-                if ((datatypeMappingFlags & TINYINT1_IS_BIT) != 0 && columnInfo.getLength() == 1) {
+                if ((dataTypeMappingFlags & TINYINT1_IS_BIT) != 0 && columnInfo.getLength() == 1) {
                     return (getBytes()[0] != '0');
                 }
                 return getInt();
@@ -1075,7 +1345,6 @@ public class MariaDbValueObject implements ValueObject {
             case DOUBLE:
                 return getDouble();
             case TIMESTAMP:
-                return getTimestamp(cal);
             case DATETIME:
                 return getTimestamp(cal);
             case DATE:
@@ -1088,19 +1357,14 @@ public class MariaDbValueObject implements ValueObject {
             case DECIMAL:
                 return getBigDecimal();
             case BLOB:
-                return getBytes();
             case LONGBLOB:
-                return getBytes();
             case MEDIUMBLOB:
-                return getBytes();
             case TINYBLOB:
                 return getBytes();
-
             case NULL:
                 return null;
-
             case YEAR:
-                if ((datatypeMappingFlags & YEAR_IS_DATE_TYPE) != 0) {
+                if ((dataTypeMappingFlags & YEAR_IS_DATE_TYPE) != 0) {
                     return getDate(cal);
                 }
                 return getShort();

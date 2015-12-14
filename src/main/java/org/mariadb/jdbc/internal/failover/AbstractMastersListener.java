@@ -62,17 +62,15 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 
 public abstract class AbstractMastersListener implements Listener {
@@ -80,7 +78,7 @@ public abstract class AbstractMastersListener implements Listener {
     /**
      * List the recent failedConnection.
      */
-    protected static Map<HostAddress, Long> blacklist = new HashMap<>();
+    protected static ConcurrentMap<HostAddress, Long> blacklist = new ConcurrentHashMap<>();
     /* =========================== Failover variables ========================================= */
     public final UrlParser urlParser;
     protected AtomicInteger currentConnectionAttempts = new AtomicInteger();
@@ -92,7 +90,7 @@ public abstract class AbstractMastersListener implements Listener {
     protected long lastRetry = 0;
     protected boolean explicitClosed = false;
     protected ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-    private AtomicLong masterHostFailTimestamp = new AtomicLong();
+    private volatile long masterHostFailNanos = 0;
     private AtomicBoolean masterHostFail = new AtomicBoolean();
 
     protected AbstractMastersListener(UrlParser urlParser) {
@@ -142,9 +140,8 @@ public abstract class AbstractMastersListener implements Listener {
      * @param hostAddress the HostAddress to add to blacklist
      */
     public void addToBlacklist(HostAddress hostAddress) {
-        if (hostAddress != null) {
-//            if (log.isTraceEnabled())log.trace("host " + hostAddress+" added to blacklist");
-            blacklist.put(hostAddress, System.currentTimeMillis());
+        if (hostAddress != null && !explicitClosed) {
+            blacklist.put(hostAddress, System.nanoTime());
         }
     }
 
@@ -152,19 +149,20 @@ public abstract class AbstractMastersListener implements Listener {
      * Permit to remove Host to blacklist after loadBalanceBlacklistTimeout seconds.
      */
     public void resetOldsBlackListHosts() {
-        long currentTime = System.currentTimeMillis();
-        Set<HostAddress> currentBlackListkeys = new HashSet<HostAddress>(blacklist.keySet());
-        for (HostAddress blackListHost : currentBlackListkeys) {
-            if (blacklist.get(blackListHost) < currentTime - urlParser.getOptions().loadBalanceBlacklistTimeout * 1000) {
-//                if (log.isTraceEnabled()) log.trace("host " + blackListHost+" remove of blacklist");
-                blacklist.remove(blackListHost);
+        long currentTimeNanos = System.nanoTime();
+        for (Map.Entry<HostAddress, Long> blEntry : blacklist.entrySet()) {
+            long entryNanos = blEntry.getValue();
+            long durationSeconds = TimeUnit.NANOSECONDS.toSeconds(currentTimeNanos - entryNanos);
+            if (durationSeconds >= urlParser.getOptions().loadBalanceBlacklistTimeout) {
+//              if (log.isTraceEnabled()) log.trace("host " + blackListHost+" remove of blacklist");
+                blacklist.remove(blEntry.getKey(), entryNanos);
             }
         }
     }
 
     protected void resetMasterFailoverData() {
         if (masterHostFail.compareAndSet(true, false)) {
-            masterHostFailTimestamp.set(0);
+            masterHostFailNanos = 0;
         }
     }
 
@@ -197,8 +195,8 @@ public abstract class AbstractMastersListener implements Listener {
         return currentProtocol;
     }
 
-    public long getMasterHostFailTimestamp() {
-        return masterHostFailTimestamp.get();
+    public long getMasterHostFailNanos() {
+        return masterHostFailNanos;
     }
 
     /**
@@ -207,7 +205,7 @@ public abstract class AbstractMastersListener implements Listener {
      */
     public boolean setMasterHostFail() {
         if (masterHostFail.compareAndSet(false, true)) {
-            masterHostFailTimestamp.set(System.currentTimeMillis());
+            masterHostFailNanos = System.nanoTime();
             currentConnectionAttempts.set(0);
             return true;
         }
@@ -355,8 +353,7 @@ public abstract class AbstractMastersListener implements Listener {
         }
 
         public void run() {
-            if (hasHostFail()) {
-//                    if (log.isTraceEnabled()) log.trace("failLoop , failover.shouldReconnect() : "+failover.shouldReconnect());
+            if (!explicitClosed && hasHostFail()) {
                 if (listener.shouldReconnect()) {
                     try {
                         if (currentConnectionAttempts.get() >= urlParser.getOptions().failoverLoopRetries) {
@@ -368,19 +365,21 @@ public abstract class AbstractMastersListener implements Listener {
                         //reconnection done !
                         stopFailover();
                     } catch (Exception e) {
-//                            log.trace("FailLoop search connection failed", e);
+                        //FailLoop search connection failed
                     }
                 } else {
                     if (currentConnectionAttempts.get() > urlParser.getOptions().retriesAllDown) {
-//                            if (log.isDebugEnabled()) log.debug("stopping failover after too many attemps ("+currentConnectionAttempts+")");
+                        //stopping failover after too many attemps
                         stopFailover();
                     }
                 }
             } else {
                 stopFailover();
             }
-//                log.trace("end launched FailLoop");
         }
     }
 
+    public static void clearBlacklist() {
+        blacklist.clear();
+    }
 }

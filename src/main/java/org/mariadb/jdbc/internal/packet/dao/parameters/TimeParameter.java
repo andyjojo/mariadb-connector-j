@@ -65,20 +65,17 @@ public class TimeParameter extends NotLongDataParameterHolder {
     private Time time;
     private Calendar calendar;
     private boolean fractionalSeconds;
-    private Options options;
 
     /**
      * Constructor.
      * @param time time to write
      * @param cal session calendar
      * @param fractionalSeconds must fractional seconds be send.
-     * @param options session options.
      */
-    public TimeParameter(Time time, Calendar cal, boolean fractionalSeconds, Options options) {
+    public TimeParameter(Time time, Calendar cal, boolean fractionalSeconds) {
         this.time = time;
         this.calendar = cal;
         this.fractionalSeconds = fractionalSeconds;
-        this.options = options;
     }
 
     public void writeTo(final OutputStream os) throws IOException {

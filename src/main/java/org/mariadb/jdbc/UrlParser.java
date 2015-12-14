@@ -89,7 +89,7 @@ import java.util.Properties;
 public class UrlParser {
 
     private String database;
-    private Options options;
+    private Options options = null;
     private List<HostAddress> addresses;
     private HaMode haMode;
 
@@ -143,7 +143,7 @@ public class UrlParser {
             } else {
                 if (url.startsWith("jdbc:mariadb:")) {
                     UrlParser urlParser = new UrlParser();
-                    parseInternal(urlParser, "jdbc:mysql:" + url.substring(12), prop);
+                    parseInternal(urlParser, "jdbc:mysql:" + url.substring(13), prop);
                     return urlParser;
                 }
             }
@@ -181,8 +181,10 @@ public class UrlParser {
                     urlParser.database = additionalParameters.substring(0, ind);
                     urlParser.options = DefaultOptions.parse(urlParser.haMode, additionalParameters.substring(ind + 1), properties);
                 } else {
-                    urlParser.database = additionalParameters;
-                    urlParser.options = DefaultOptions.parse(urlParser.haMode, "", properties);
+                    if (!"".equals(additionalParameters)) {
+                        urlParser.database = additionalParameters;
+                    }
+                    urlParser.options = DefaultOptions.parse(urlParser.haMode, "", properties, urlParser.options);
                 }
             }
             setDefaultHostAddressType(urlParser);
@@ -233,7 +235,7 @@ public class UrlParser {
         String[] arr = new String[]{"jdbc:mysql:thin:", "jdbc:mariadb:"};
         for (String prefix : arr) {
             if (url.startsWith(prefix)) {
-                parseInternal(this, url, new Properties());
+                parseInternal(this, "jdbc:mysql:" + url.substring(prefix.length()), new Properties());
                 break;
             }
         }
@@ -295,6 +297,30 @@ public class UrlParser {
 
     public HaMode getHaMode() {
         return haMode;
+    }
+
+    @Override
+    public boolean equals(Object parser) {
+        if (this == parser) {
+            return true;
+        }
+        if (!(parser instanceof UrlParser)) {
+            return false;
+        }
+
+        UrlParser urlParser = (UrlParser) parser;
+
+        if (getDatabase() != null ? !getDatabase().equals(urlParser.getDatabase()) : urlParser.getDatabase() != null) {
+            return false;
+        }
+        if (getOptions() != null ? !getOptions().equals(urlParser.getOptions()) : urlParser.getOptions() != null) {
+            return false;
+        }
+        if (addresses != null ? !addresses.equals(urlParser.addresses) : urlParser.addresses != null) {
+            return false;
+        }
+        return getHaMode() == urlParser.getHaMode();
+
     }
 
 }

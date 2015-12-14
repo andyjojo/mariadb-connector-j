@@ -79,12 +79,8 @@ public class MastersSlavesProtocol extends MasterProtocol {
      * @param searchFilter search parameter
      * @throws QueryException if not found
      */
-    public static void loop(MastersSlavesListener listener, final List<HostAddress> addresses, Map<HostAddress, Long> blacklist,
-                            SearchFilter searchFilter) throws QueryException {
-//        if (log.isDebugEnabled()) {
-//            log.debug("searching for master:" + searchFilter.isSearchForMaster() + " replica:" + searchFilter.isSearchForSlave()
-// + " addresses:" + addresses);
-//        }
+    public static void loop(MastersSlavesListener listener, final List<HostAddress> addresses,
+                            Map<HostAddress, Long> blacklist, SearchFilter searchFilter) throws QueryException {
 
         MastersSlavesProtocol protocol;
         List<HostAddress> loopAddresses = new LinkedList<>(addresses);
@@ -106,9 +102,12 @@ public class MastersSlavesProtocol extends MasterProtocol {
 //                if (log.isDebugEnabled()) log.debug("trying to connect to " + protocol.getHostAddress());
 
                 protocol.connect();
+                if (listener.isExplicitClosed()) {
+                    protocol.close();
+                    return;
+                }
+
                 blacklist.remove(protocol.getHostAddress());
-//                if (log.isDebugEnabled()) log.debug("connected to " + (protocol.isMasterConnection()?"primary ":"replica ")
-// + protocol.getHostAddress());
 
                 if (searchFilter.isSearchForMaster() && protocol.isMasterConnection()) {
                     if (foundMaster(listener, protocol, searchFilter)) {
@@ -124,9 +123,7 @@ public class MastersSlavesProtocol extends MasterProtocol {
 
             } catch (QueryException e) {
                 lastQueryException = e;
-                blacklist.put(protocol.getHostAddress(), System.currentTimeMillis());
-//                if (log.isDebugEnabled()) log.debug("Could not connect to " + protocol.getHostAddress() + " searching: " + searchFilter
-// + " error: " + e.getMessage());
+                blacklist.put(protocol.getHostAddress(), System.nanoTime());
             }
 
             if (!searchFilter.isSearchForMaster() && !searchFilter.isSearchForSlave()) {
@@ -147,14 +144,16 @@ public class MastersSlavesProtocol extends MasterProtocol {
                 error = "No active connection found for master";
             }
             if (lastQueryException != null) {
-                throw new QueryException(error, lastQueryException.getErrorCode(), lastQueryException.getSqlState(), lastQueryException);
+                throw new QueryException(error + " : " + lastQueryException.getMessage(),
+                        lastQueryException.getErrorCode(), lastQueryException.getSqlState(), lastQueryException);
             }
             throw new QueryException(error);
         }
 
     }
 
-    private static boolean foundMaster(MastersSlavesListener listener, MastersSlavesProtocol protocol, SearchFilter searchFilter) {
+    private static boolean foundMaster(MastersSlavesListener listener, MastersSlavesProtocol protocol,
+                                       SearchFilter searchFilter) {
         protocol.setMustBeMasterConnection(true);
         searchFilter.setSearchForMaster(false);
         listener.foundActiveMaster(protocol);
@@ -170,7 +169,8 @@ public class MastersSlavesProtocol extends MasterProtocol {
         return false;
     }
 
-    private static boolean foundSecondary(MastersSlavesListener listener, MastersSlavesProtocol protocol, SearchFilter searchFilter)
+    private static boolean foundSecondary(MastersSlavesListener listener, MastersSlavesProtocol protocol,
+                                          SearchFilter searchFilter)
             throws QueryException {
         searchFilter.setSearchForSlave(false);
         protocol.setMustBeMasterConnection(false);

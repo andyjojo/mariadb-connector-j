@@ -4,10 +4,15 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mariadb.jdbc.internal.util.DefaultOptions;
+import org.mariadb.jdbc.internal.util.constant.HaMode;
 import org.mariadb.jdbc.internal.queryresults.MariaSelectResultSet;
 
+import java.io.*;
 import java.math.BigDecimal;
+import java.net.URL;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -340,6 +345,28 @@ public class DriverTest extends BaseTest {
         assertEquals(3307, url.getHostAddresses().get(0).port);
 
     }
+
+
+
+    @Test
+    public void testAliasReplication() throws SQLException {
+        UrlParser url = UrlParser.parse("jdbc:mysql:replication://localhost/test");
+        UrlParser url2 = UrlParser.parse("jdbc:mariadb:replication://localhost/test");
+        assertEquals(url, url2);
+    }
+
+    @Test
+    public void testAliasDataSource() throws SQLException {
+        ArrayList<HostAddress> hostAddresses = new ArrayList<>();
+        hostAddresses.add(new HostAddress(hostname, port));
+        UrlParser urlParser = new UrlParser(database, hostAddresses, DefaultOptions.defaultValues(HaMode.NONE), HaMode.NONE);
+        UrlParser urlParser2 = new UrlParser(database, hostAddresses, DefaultOptions.defaultValues(HaMode.NONE), HaMode.NONE);
+
+        urlParser.parseUrl("jdbc:mysql:replication://localhost/test");
+        urlParser2.parseUrl("jdbc:mariadb:replication://localhost/test");
+        assertEquals(urlParser, urlParser2);
+    }
+
 
     @Test
     public void testEscapes() throws SQLException {
@@ -996,11 +1023,11 @@ public class DriverTest extends BaseTest {
             if (rs.getBoolean(1)) {
                 namedPipeName = rs.getString(2);
             } else {
-                log.info("test 'namedpipe' skipped");
+                System.out.println("test 'namedpipe' skipped");
             }
         } catch (SQLException e) {
             //named pipe not found,
-            log.info("test 'namedpipe' skipped");
+            System.out.println("test 'namedpipe' skipped");
         }
 
         //skip test if no namedPipeName was obtained because then we do not use a socket connection
@@ -1049,7 +1076,7 @@ public class DriverTest extends BaseTest {
         if (!rs.next()) {
             return;
         }
-        log.info("os:" + rs.getString(1) + " path:" + rs.getString(2));
+        System.out.println("os:" + rs.getString(1) + " path:" + rs.getString(2));
         String os = rs.getString(1);
         if (os.toLowerCase().startsWith("win")) {
             return;

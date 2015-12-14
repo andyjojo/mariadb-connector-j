@@ -59,6 +59,8 @@ import org.mariadb.jdbc.internal.protocol.AuroraProtocol;
 import org.mariadb.jdbc.internal.protocol.Protocol;
 
 import java.sql.SQLException;
+import java.io.IOException;
+import java.sql.SQLException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -77,7 +79,6 @@ public class AuroraListener extends MastersSlavesListener {
         super(urlParser);
         masterProtocol = null;
         secondaryProtocol = null;
-        lastQueryTime = System.currentTimeMillis();
     }
 
     @Override
@@ -177,7 +178,9 @@ public class AuroraListener extends MastersSlavesListener {
                         return loopAddress.get(i);
                     }
                 }
-            } catch (SQLException ioe) {
+            } catch (SQLException exception) {
+                //eat exception because cannot happen in this getString()
+            } catch (IOException ioe) {
                 //eat exception
             } catch (QueryException qe) {
                 if (proxy.hasToHandleFailover(qe) && setSecondaryHostFail()) {

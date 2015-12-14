@@ -107,7 +107,6 @@ public class Options {
     public int loadBalanceBlacklistTimeout;
     public int failoverLoopRetries;
 
-
     @Override
     public String toString() {
         return "Options{"

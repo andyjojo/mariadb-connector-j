@@ -12,6 +12,7 @@ import java.util.TimeZone;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class DateTest extends BaseTest {
     /**
@@ -31,7 +32,7 @@ public class DateTest extends BaseTest {
         createTable("dtest4", "d  time");
         createTable("date_test3", " x date");
         createTable("date_test4", "x date");
-
+        createTable("timestampAsDate", "ts timestamp(6), dt datetime(6), dd date");
 
     }
 
@@ -243,6 +244,71 @@ public class DateTest extends BaseTest {
     }
 
     @Test
+    public void timestampAsDate() throws SQLException {
+
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+
+        Calendar cal2 = Calendar.getInstance();
+        cal2.set(Calendar.YEAR, 1970);
+        cal2.set(Calendar.MONTH, 0);
+        cal2.set(Calendar.DAY_OF_YEAR, 1);
+
+        Calendar cal3 = Calendar.getInstance();
+        cal3.set(Calendar.HOUR_OF_DAY, 0);
+        cal3.set(Calendar.MINUTE, 0);
+        cal3.set(Calendar.SECOND, 0);
+        cal3.set(Calendar.MILLISECOND, 0);
+        cal3.set(Calendar.YEAR, 1970);
+        cal3.set(Calendar.MONTH, 0);
+        cal3.set(Calendar.DAY_OF_YEAR, 1);
+
+
+        Timestamp currentTimeStamp = new Timestamp(System.currentTimeMillis());
+        PreparedStatement preparedStatement1 = sharedConnection.prepareStatement("/*CLIENT*/ insert into timestampAsDate values (?, ?, ?)");
+        preparedStatement1.setTimestamp(1, currentTimeStamp);
+        preparedStatement1.setTimestamp(2, currentTimeStamp);
+        preparedStatement1.setDate(3, new Date(currentTimeStamp.getTime()));
+        preparedStatement1.addBatch();
+        preparedStatement1.execute();
+
+        Date dateWithoutTime = new Date(cal.getTimeInMillis());
+        Time zeroTime = new Time(cal3.getTimeInMillis());
+
+        ResultSet rs = sharedConnection.createStatement().executeQuery("select * from timestampAsDate");
+        checkResult(rs, currentTimeStamp, cal, dateWithoutTime, zeroTime);
+
+        PreparedStatement pstmt = sharedConnection.prepareStatement("select * from timestampAsDate where 1 = ?");
+        pstmt.setInt(1,1);
+        pstmt.addBatch();
+        rs = pstmt.executeQuery();
+        checkResult(rs, currentTimeStamp, cal, dateWithoutTime, zeroTime);
+    }
+
+    private void checkResult(ResultSet rs, Timestamp currentTimeStamp, Calendar cal, Date dateWithoutTime, Time zeroTime) throws SQLException {
+        if (rs.next()) {
+            Assert.assertEquals(rs.getTimestamp(1), currentTimeStamp);
+            Assert.assertEquals(rs.getTimestamp(2), currentTimeStamp);
+            Assert.assertEquals(rs.getTimestamp(3), new Timestamp(cal.getTimeInMillis()));
+
+            Assert.assertEquals(rs.getDate(1), new Date(currentTimeStamp.getTime()));
+            Assert.assertEquals(rs.getDate(2), new Date(currentTimeStamp.getTime()));
+            Assert.assertEquals(rs.getDate(3), dateWithoutTime);
+            Assert.assertEquals(rs.getTime(1), new Time(currentTimeStamp.getTime()));
+            Assert.assertEquals(rs.getTime(2), new Time(currentTimeStamp.getTime()));
+            Assert.assertEquals(rs.getTime(3), zeroTime);
+        } else {
+            fail("Must have a result");
+        }
+        rs.close();
+
+    }
+
+
+    @Test
     public void javaUtilDateInPreparedStatementAsTimeStamp() throws Exception {
         java.util.Date currentDate = Calendar.getInstance(TimeZone.getDefault()).getTime();
         PreparedStatement ps = sharedConnection.prepareStatement("insert into dtest values(?)");
@@ -315,9 +381,19 @@ public class DateTest extends BaseTest {
             assertEquals(currentDate.getMinutes(), rs.getTime(1).getMinutes());
             assertEquals(currentDate.getSeconds(), rs.getTime(1).getSeconds());
         } else {
-            //mysql 5 seconde precision
-            Assert.assertTrue(Math.abs(currentDate.getMinutes() - rs.getTime(1).getMinutes()) <= 5);
-            Assert.assertTrue(Math.abs(currentDate.getSeconds() - rs.getTime(1).getSeconds()) <= 5);
+            //mysql 5 seconds precision
+            try {
+                System.out.println(Math.abs(currentDate.getMinutes() - rs.getTime(1).getMinutes()));
+                System.out.println(Math.abs(currentDate.getSeconds() - rs.getTime(1).getSeconds()));
+                Assert.assertTrue(Math.abs(currentDate.getMinutes() - rs.getTime(1).getMinutes()) <= 5);
+                Assert.assertTrue(Math.abs(currentDate.getSeconds() - rs.getTime(1).getSeconds()) <= 5);
+            } catch (AssertionError a) {
+                System.out.println("currentDate:" + currentDate.toString() + " -> " + currentDate.getMinutes());
+                System.out.println("rs.getTime(1):" + rs.getTime(1).toString() + " -> " + rs.getTime(1).getMinutes());
+                System.out.println(Math.abs(currentDate.getMinutes() - rs.getTime(1).getMinutes()));
+                System.out.println(Math.abs(currentDate.getSeconds() - rs.getTime(1).getSeconds()));
+                throw a;
+            }
         }
     }
 
@@ -342,7 +418,6 @@ public class DateTest extends BaseTest {
             java.sql.Timestamp ts = rs.getTimestamp(1);
             long differenceToServer = ts.getTime() - now.getTime();
             long diff = Math.abs(differenceToServer - totalOffset);
-            log.trace("diff : " + diff);
             /* query take less than a second but taking in account server and client time second diff ... */
             assertTrue(diff < 5000);
 
@@ -387,7 +462,7 @@ public class DateTest extends BaseTest {
         if (isMariadbServer) {
             assertTrue("2013-07-18 13:44:22.123456".equals(rs.getString(2)));
         } else {
-            assertTrue("2013-07-18 13:44:22".equals(rs.getString(2)));
+            assertTrue("2013-07-18 13:44:22.0".equals(rs.getString(2)));
         }
         assertTrue(rs.next());
         Timestamp readTs = rs.getTimestamp(2);

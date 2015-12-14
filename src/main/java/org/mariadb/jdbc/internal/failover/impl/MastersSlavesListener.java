@@ -75,7 +75,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
 
     protected Protocol masterProtocol;
     protected Protocol secondaryProtocol;
-    protected long lastQueryTime = 0;
+    protected long lastQueryNanos = 0;
     protected ScheduledFuture scheduledPing = null;
 
     /**
@@ -86,7 +86,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
         super(urlParser);
         masterProtocol = null;
         secondaryProtocol = null;
-        lastQueryTime = System.currentTimeMillis();
+        lastQueryNanos = System.nanoTime();
 
     }
 
@@ -123,34 +123,38 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
      * @throws SQLException if error append during closing those connections.
      */
     public void preClose() throws SQLException {
-        setExplicitClosed(true);
-//        log.trace("preClose connections");
-        proxy.lock.lock();
-        try {
-            if (masterProtocol != null && this.masterProtocol.isConnected()) {
-                this.masterProtocol.close();
-            }
-            if (secondaryProtocol != null && this.secondaryProtocol.isConnected()) {
-                this.secondaryProtocol.close();
-            }
-        } finally {
-            proxy.lock.unlock();
-            if (scheduledPing != null) {
-                scheduledPing.cancel(true);
-            }
-
-            if (scheduledFailover != null) {
-                scheduledFailover.cancel(true);
-                isLooping.set(false);
-            }
-            executorService.shutdownNow();
+        if (!isExplicitClosed()) {
+            proxy.lock.lock();
             try {
-                executorService.awaitTermination(15, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-//                log.trace("executorService interrupted");
+                setExplicitClosed(true);
+
+                //closing first additional thread if running to avoid connection creation before closing
+                if (scheduledPing != null) {
+                    scheduledPing.cancel(true);
+                }
+
+                if (scheduledFailover != null) {
+                    scheduledFailover.cancel(true);
+                    isLooping.set(false);
+                }
+                executorService.shutdownNow();
+                try {
+                    executorService.awaitTermination(15L, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+
+                }
+
+                //closing connections
+                if (masterProtocol != null && this.masterProtocol.isConnected()) {
+                    this.masterProtocol.close();
+                }
+                if (secondaryProtocol != null && this.secondaryProtocol.isConnected()) {
+                    this.secondaryProtocol.close();
+                }
+            } finally {
+                proxy.lock.unlock();
             }
         }
-//        log.trace("preClose connections end");
     }
 
     @Override
@@ -175,7 +179,7 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
         }
 
         if (urlParser.getOptions().validConnectionTimeout != 0) {
-            lastQueryTime = System.currentTimeMillis();
+            lastQueryNanos = System.nanoTime();
         }
     }
 
@@ -191,22 +195,23 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
             if (currentConnectionAttempts.get() > urlParser.getOptions().retriesAllDown) {
                 return false;
             }
-            long now = System.currentTimeMillis();
+            long nowNanos = System.nanoTime();
 
             if (isMasterHostFail()) {
                 if (urlParser.getOptions().queriesBeforeRetryMaster > 0
                         && queriesSinceFailover.get() >= urlParser.getOptions().queriesBeforeRetryMaster) {
                     return true;
                 }
+                long durationSeconds = TimeUnit.NANOSECONDS.toSeconds(nowNanos - getMasterHostFailNanos());
                 if (urlParser.getOptions().secondsBeforeRetryMaster > 0
-                        && (now - getMasterHostFailTimestamp()) >= urlParser.getOptions().secondsBeforeRetryMaster * 1000) {
+                        && durationSeconds >= urlParser.getOptions().secondsBeforeRetryMaster) {
                     return true;
                 }
             }
 
+            //we don't worry to bother slave until reconnect.
             if (isSecondaryHostFail()
-                && urlParser.getOptions().secondsBeforeRetryMaster > 0
-                && (now - getSecondaryHostFailTimestamp()) >= urlParser.getOptions().secondsBeforeRetryMaster * 1000) {
+                && TimeUnit.NANOSECONDS.toMillis(nowNanos - getSecondaryHostFailNanos()) >= 2000) {
                 return true;
             }
         }
@@ -283,8 +288,8 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
 
 //            if (log.isDebugEnabled()) {
 //                if (getMasterHostFailTimestamp() > 0) {
-//                    log.debug("new primary node [" + newMasterProtocol.getHostAddress().toString() + "] connection established
-// after " + (System.currentTimeMillis() - getMasterHostFailTimestamp()));
+//                    log.debug("new primary node [" + newMasterProtocol.getHostAddress().toString() + "] connection established"
+//                                + " after " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - getMasterHostFailNanos()));
 //                } else
 //                    log.debug("new primary node [" + newMasterProtocol.getHostAddress().toString() + "] connection established");
 //            }
@@ -334,8 +339,8 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
 
 //            if (log.isDebugEnabled()) {
 //                if (getSecondaryHostFailTimestamp() > 0) {
-//                    log.debug("new active secondary node [" + newSecondaryProtocol.getHostAddress().toString() + "] connection
-// established after " + (System.currentTimeMillis() - getSecondaryHostFailTimestamp()));
+//                    log.debug("new active secondary node [" + newSecondaryProtocol.getHostAddress().toString() + "] connection"
+//                            + " established after " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - getSecondaryHostFailNanos()));
 //                } else
 //                    log.debug("new active secondary node [" + newSecondaryProtocol.getHostAddress().toString() + "] connection
 // established");
@@ -680,10 +685,10 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
 
 
     private String addErrorMessageNotReconnected(boolean connectionTypeMaster) {
-        long longestFail = isMasterHostFail() ? (isSecondaryHostFail() ? Math.min(getMasterHostFailTimestamp(),
-                getSecondaryHostFailTimestamp()) : getMasterHostFailTimestamp()) : getSecondaryHostFailTimestamp();
-        long nextReconnectionTime = urlParser.getOptions().secondsBeforeRetryMaster * 1000
-                - (System.currentTimeMillis() - longestFail);
+        long longestFailNanos = isMasterHostFail() ? (isSecondaryHostFail() ? Math.min(getMasterHostFailNanos(),
+                getSecondaryHostFailNanos()) : getMasterHostFailNanos()) : getSecondaryHostFailNanos();
+        long failDuration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - longestFailNanos);
+        long nextReconnectionTime = urlParser.getOptions().secondsBeforeRetryMaster * 1000 - failDuration;
         if (urlParser.getOptions().secondsBeforeRetryMaster > 0) {
             if (urlParser.getOptions().queriesBeforeRetryMaster > 0) {
                 return " Driver will try to reconnect " + (connectionTypeMaster ? "primary" : "secondary")
@@ -713,23 +718,32 @@ public class MastersSlavesListener extends AbstractMastersSlavesListener {
         }
 
         public void run() {
-            if (lastQueryTime + urlParser.getOptions().validConnectionTimeout * 1000 < System.currentTimeMillis() && !isMasterHostFail()) {
-                boolean masterFail = false;
-                try {
-                    if (masterProtocol != null && masterProtocol.isConnected()) {
-                        checkMasterStatus(null);
-                    } else {
+            if (explicitClosed) {
+                //stop thread
+                if (scheduledPing != null) {
+                    scheduledPing.cancel(false);
+                }
+            } else {
+                long durrationSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - lastQueryNanos);
+                if (durrationSeconds >= urlParser.getOptions().validConnectionTimeout
+                    && !isMasterHostFail()) {
+                    boolean masterFail = false;
+                    try {
+                        if (masterProtocol != null && masterProtocol.isConnected()) {
+                            checkMasterStatus(null);
+                        } else {
+                            masterFail = true;
+                        }
+                    } catch (QueryException e) {
                         masterFail = true;
                     }
-                } catch (QueryException e) {
-                    masterFail = true;
-                }
-
-                if (masterFail && setMasterHostFail()) {
-                    try {
-                        listener.primaryFail(null, null);
-                    } catch (Throwable t) {
-                        //do nothing
+    
+                    if (masterFail && setMasterHostFail()) {
+                        try {
+                            listener.primaryFail(null, null);
+                        } catch (Throwable t) {
+                            //do nothing
+                        }
                     }
                 }
             }

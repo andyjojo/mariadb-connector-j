@@ -2457,7 +2457,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * Retrieves the holdability of this <code>ResultSet</code> object
      *
      * @return either <code>ResultSet.HOLD_CURSORS_OVER_COMMIT</code> or <code>ResultSet.CLOSE_CURSORS_AT_COMMIT</code>
-     * @throws java.sql.SQLException if a database access error occurs or this method is called on a closed result set
+     * @throws SQLException if a database access error occurs or this method is called on a closed result set
      * @since 1.6
      */
     public int getHoldability() throws SQLException {
@@ -2516,7 +2516,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @throws java.sql.SQLFeatureNotSupportedException if the JDBC driver does not support this method
      * @since 1.6
      */
-    public void updateNClob(int columnIndex, java.sql.NClob nclob) throws SQLException {
+    public void updateNClob(int columnIndex, NClob nclob) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("Updates are not supported");
     }
 
@@ -2534,7 +2534,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @throws java.sql.SQLFeatureNotSupportedException if the JDBC driver does not support this method
      * @since 1.6
      */
-    public void updateNClob(String columnLabel, java.sql.NClob nclob) throws SQLException {
+    public void updateNClob(String columnLabel, NClob nclob) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("Updates are not supported");
     }
 
@@ -2648,7 +2648,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @throws java.sql.SQLFeatureNotSupportedException if the JDBC driver does not support this method
      * @since 1.6
      */
-    public java.sql.NClob getNClob(String columnLabel) throws SQLException {
+    public NClob getNClob(String columnLabel) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("NClobs are not supported");
     }
 
@@ -2664,7 +2664,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @since 1.6
      */
     @Override
-    public java.sql.SQLXML getSQLXML(int columnIndex) throws SQLException {
+    public SQLXML getSQLXML(int columnIndex) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("SQLXML not supported");
     }
 
@@ -2681,7 +2681,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @since 1.6
      */
     @Override
-    public java.sql.SQLXML getSQLXML(String columnLabel) throws SQLException {
+    public SQLXML getSQLXML(String columnLabel) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("SQLXML not supported");
     }
 
@@ -2700,7 +2700,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @since 1.6
      */
     @Override
-    public void updateSQLXML(int columnIndex, java.sql.SQLXML xmlObject) throws SQLException {
+    public void updateSQLXML(int columnIndex, SQLXML xmlObject) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("SQLXML not supported");
     }
 
@@ -2720,7 +2720,7 @@ public abstract class AbstractSelectResultSet extends AbstractResult implements 
      * @since 1.6
      */
     @Override
-    public void updateSQLXML(String columnLabel, java.sql.SQLXML xmlObject) throws SQLException {
+    public void updateSQLXML(String columnLabel, SQLXML xmlObject) throws SQLException {
         throw ExceptionMapper.getFeatureNotSupportedException("SQLXML not supported");
     }
 

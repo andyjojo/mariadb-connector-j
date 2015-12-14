@@ -1010,8 +1010,15 @@ public class MariaDbStatement implements Statement {
         if (batchQueries == null) {
             batchQueries = new ArrayList<>();
         }
-        isInsertRewriteable(sql);
-        batchQueries.add(new MariaDbQuery(sql));
+        String sqlQuery;
+        if (protocol.getOptions().rewriteBatchedStatements || protocol.getOptions().allowMultiQueries) {
+            sqlQuery = deleteEndSemicolonPattern.matcher(sql).replaceAll("");
+            isInsertRewriteable(sqlQuery);
+        } else {
+            sqlQuery = sql;
+        }
+
+        batchQueries.add(new MariaDbQuery(sqlQuery));
     }
 
     /**
@@ -1043,6 +1050,11 @@ public class MariaDbStatement implements Statement {
     protected int getInsertIncipit(String sql) {
         String sqlUpper = sql.toUpperCase();
         if (!sqlUpper.startsWith("INSERT") && !sqlUpper.startsWith("/*CLIENT*/ INSERT")) {
+            return -1;
+        }
+
+        // INSERT FROM SELECT Cannot be rewritten.
+        if (sqlUpper.indexOf("SELECT") != -1) {
             return -1;
         }
 
@@ -1130,7 +1142,7 @@ public class MariaDbStatement implements Statement {
                 int size = batchQueries.size();
                 boolean rewrittenBatch = isRewriteable && getProtocol().getOptions().rewriteBatchedStatements;
                 try {
-                    execute(batchQueries, rewrittenBatch, rewrittenBatch ? firstRewrite.length() : 0);
+                    execute(batchQueries, rewrittenBatch, (rewrittenBatch && firstRewrite != null) ? firstRewrite.length() : 0);
                     return getUpdateCountsForReWrittenBatch(size, rewrittenBatch);
                 } catch (SQLException sqlException) {
                     throw new BatchUpdateException(sqlException.getMessage(), sqlException.getSQLState(), sqlException.getErrorCode(), Arrays.copyOf(ret, batchQueriesCount), sqlException);

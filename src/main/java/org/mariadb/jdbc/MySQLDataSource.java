@@ -47,39 +47,34 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 OF SUCH DAMAGE.
 */
 
+package org.mariadb.jdbc;
 
-package org.mariadb.jdbc.internal.packet.dao.parameters;
+import java.sql.SQLException;
 
-import org.mariadb.jdbc.internal.stream.PacketOutputStream;
-import org.mariadb.jdbc.internal.MariaDbType;
-
-import java.io.IOException;
-import java.io.OutputStream;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-
-public class BigIntParameter extends NotLongDataParameterHolder {
-    private BigDecimal value;
-
-    public BigIntParameter(BigInteger value) {
-        this.value = new BigDecimal(value);
+/**
+ * Keep the class name for compatibility
+ * @deprecated use class MariaDbDataSource directly
+ */
+public class MySQLDataSource extends  MariaDbDataSource {
+    /**
+     * Constructor.
+     * @param hostname hostname (ipv4, ipv6, dns name)
+     * @param port server port
+     * @param database database name
+     * @throws SQLException exception if connection failed
+     */
+    public MySQLDataSource(String hostname, int port, String database) throws SQLException {
+        super(hostname, port, database);
     }
 
-    public void writeTo(final OutputStream os) throws IOException {
-        ParameterWriter.write(os, value);
+    public MySQLDataSource(String url) throws SQLException {
+        super(url);
     }
 
-    public long getApproximateTextProtocolLength() {
-        return value.toPlainString().getBytes().length;
+    /**
+     * Default constructor. hostname will be localhost, port 3306.
+     */
+    public MySQLDataSource() {
+        super();
     }
-
-
-    public void writeBinary(PacketOutputStream writeBuffer) {
-        writeBuffer.writeStringLength(value.toPlainString());
-    }
-
-    public MariaDbType getMariaDbType() {
-        return MariaDbType.VARSTRING;
-    }
-
 }

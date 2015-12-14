@@ -59,6 +59,7 @@ import org.mariadb.jdbc.internal.queryresults.MariaSelectResultSet;
 import org.mariadb.jdbc.internal.util.ExceptionMapper;
 import org.mariadb.jdbc.internal.util.dao.QueryException;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
@@ -110,7 +111,7 @@ public class AuroraProtocol extends MastersSlavesProtocol {
             }
 
         } catch (QueryException e) {
-            blacklist.put(protocol.getHostAddress(), System.currentTimeMillis());
+            blacklist.put(protocol.getHostAddress(), System.nanoTime());
 //            if (log.isDebugEnabled())
 //                log.debug("Could not connect to " + protocol.currentHost + " searching for master : " + searchFilter.isSearchForMaster()
 // + " for replica :" + searchFilter.isSearchForSlave() + " error:" + e.getMessage());
@@ -151,6 +152,10 @@ public class AuroraProtocol extends MastersSlavesProtocol {
                 loopAddresses.remove(0);
 
                 protocol.connect();
+                if (listener.isExplicitClosed()) {
+                    protocol.close();
+                    return;
+                }
                 blacklist.remove(protocol.getHostAddress());
 
                 if (searchFilter.isSearchForMaster() && protocol.isMasterConnection()) {
@@ -175,7 +180,7 @@ public class AuroraProtocol extends MastersSlavesProtocol {
                 }
             } catch (QueryException e) {
                 lastQueryException = e;
-                blacklist.put(protocol.getHostAddress(), System.currentTimeMillis());
+                blacklist.put(protocol.getHostAddress(), System.nanoTime());
             }
 
             if (!searchFilter.isSearchForMaster() && !searchFilter.isSearchForSlave()) {
@@ -272,8 +277,10 @@ public class AuroraProtocol extends MastersSlavesProtocol {
             this.readOnly = !this.masterConnection;
             return this.masterConnection;
 
-        } catch (SQLException ioe) {
-            //log.trace("exception during checking if master", ioe);
+        } catch (SQLException sqle) {
+            throw new QueryException("could not check the 'innodb_read_only' variable status on " + this.getHostAddress()
+                    + " : " + sqle.getMessage(), -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), sqle);
+        } catch (IOException ioe) {
             throw new QueryException("could not check the 'innodb_read_only' variable status on " + this.getHostAddress()
                     + " : " + ioe.getMessage(), -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), ioe);
         } finally {
