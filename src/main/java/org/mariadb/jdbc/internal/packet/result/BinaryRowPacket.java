@@ -50,11 +50,11 @@ OF SUCH DAMAGE.
 package org.mariadb.jdbc.internal.packet.result;
 
 import org.mariadb.jdbc.internal.util.Options;
-import org.mariadb.jdbc.internal.queryresults.ValueObject;
+import org.mariadb.jdbc.internal.queryresults.value.ValueObject;
 import org.mariadb.jdbc.internal.packet.read.ReadPacketFetcher;
 import org.mariadb.jdbc.internal.util.buffer.Reader;
 import org.mariadb.jdbc.internal.packet.dao.ColumnInformation;
-import org.mariadb.jdbc.internal.queryresults.MariaDbValueObject;
+import org.mariadb.jdbc.internal.queryresults.value.MariaDbValueObject;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

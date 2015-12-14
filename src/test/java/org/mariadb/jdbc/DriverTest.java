@@ -4,10 +4,9 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mariadb.jdbc.internal.queryresults.MariaSelectResultSet;
 
-import java.io.*;
 import java.math.BigDecimal;
-import java.net.URL;
 import java.sql.*;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -417,7 +416,7 @@ public class DriverTest extends BaseTest {
         final ResultSet rs = sharedConnection.createStatement().executeQuery("select * from test_batch");
         ps.executeQuery("SELECT 1");
         rs1 = ps.getGeneratedKeys();
-        assertEquals(MariaDbResultSet.EMPTY, rs1);
+        assertEquals(MariaSelectResultSet.EMPTY, rs1);
         assertEquals(true, rs.next());
         assertEquals("aaa", rs.getString(2));
         assertEquals(true, rs.next());
@@ -972,80 +971,7 @@ public class DriverTest extends BaseTest {
         }
     }
 
-    /* CONJ-14 
-     * getUpdateCount(), getResultSet() should indicate "no more results" with
-     * (getUpdateCount() == -1 && getResultSet() == null)  
-     */
-    @Test
-    public void conj14() throws Exception {
-        Statement st = sharedConnection.createStatement();
-        
-        /* 1. Test update statement */
-        st.execute("use " + database);
-        assertEquals(0, st.getUpdateCount());
 
-        /* No more results */
-        assertFalse(st.getMoreResults());
-        assertEquals(-1, st.getUpdateCount());
-        assertEquals(null, st.getResultSet());
-        
-        /* 2. Test select statement */
-        st.execute("select 1");
-        assertEquals(-1, st.getUpdateCount());
-        assertTrue(st.getResultSet() != null);
-        
-        /* No More results */
-        assertFalse(st.getMoreResults());
-        assertEquals(-1, st.getUpdateCount());
-        assertEquals(null, st.getResultSet());
-        
-        /* Test batch  */
-        Connection connection = null;
-        try {
-            connection = setConnection("&allowMultiQueries=true");
-            st = connection.createStatement();
-            
-            /* 3. Batch with two SELECTs */
-
-            st.execute("select 1;select 2");
-            /* First result (select)*/
-            assertEquals(-1, st.getUpdateCount());
-            assertTrue(st.getResultSet() != null);
-            
-            /* has more results */
-            assertTrue(st.getMoreResults()); 
-            
-            /* Second result (select) */
-            assertEquals(-1, st.getUpdateCount());
-            assertTrue(st.getResultSet() != null);
-            
-            /* no more results */
-            assertFalse(st.getMoreResults());
-            assertEquals(-1, st.getUpdateCount());
-            assertEquals(null, st.getResultSet());
-            
-            /* 4. Batch with a SELECT and non-SELECT */
-
-            st.execute("select 1; use " + database);
-            /* First result (select)*/
-            assertEquals(-1, st.getUpdateCount());
-            assertTrue(st.getResultSet() != null);
-            
-            /* has more results */
-            assertTrue(st.getMoreResults()); 
-            
-            /* Second result (use) */
-            assertEquals(0, st.getUpdateCount());
-            assertTrue(st.getResultSet() == null);
-            
-            /* no more results */
-            assertFalse(st.getMoreResults());
-            assertEquals(-1, st.getUpdateCount());
-            assertEquals(null, st.getResultSet());
-        } finally {
-            connection.close();
-        }
-    }
 
     @Test
     public void conj25() throws Exception {

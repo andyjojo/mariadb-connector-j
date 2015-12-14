@@ -26,7 +26,7 @@ import java.util.Properties;
 @Ignore
 public class BaseTest {
     protected static final Logger log = LoggerFactory.getLogger(BaseTest.class);
-    protected static final String mDefUrl = "jdbc:mysql://localhost:3306/test?user=root";
+    protected static final String mDefUrl = "jdbc:mysql://localhost:3306/testj?user=root";
     protected static String connU;
     protected static String connUri;
     protected static String hostname;
@@ -39,9 +39,13 @@ public class BaseTest {
     protected static Connection sharedConnection;
     private static List<String> tempTableList = new ArrayList<>();
     private static List<String> tempProcedureList = new ArrayList<>();
+    private static List<String> tempFunctionList = new ArrayList<>();
 
     @Rule
     public TestRule watcher = new TestWatcher() {
+        protected void starting(Description description) {
+            log.trace("begin test : " + description.getClassName() + "." + description.getMethodName());
+        }
         protected void succeeded(Description description) {
             log.trace("finished test success : " + description.getClassName() + "." + description.getMethodName());
         }
@@ -67,9 +71,6 @@ public class BaseTest {
         username = urlParser.getUsername();
         password = urlParser.getPassword();
 
-        log.debug("Properties parsed from JDBC URL - hostname: " + hostname + ", port: " + port + ", database: "
-                + database + ", username: " + username + ", password: " + password);
-
         setUri();
 
         sharedConnection = DriverManager.getConnection(connUri);
@@ -89,36 +90,34 @@ public class BaseTest {
      */
     @AfterClass
     public static void afterClassBaseTest() throws SQLException {
-        if (!sharedConnection.isClosed()) {
-            if (!tempTableList.isEmpty()) {
-                Statement stmt = sharedConnection.createStatement();
-                for (String tableName : tempTableList) {
-                    try {
-                        stmt.execute("DROP TABLE IF EXISTS " + tableName);
-                    } catch (SQLException e) {
-                        //eat exception
-                    }
-                }
-                tempTableList.clear();
+        if (sharedConnection != null) {
+            if (!sharedConnection.isClosed()) {
+                dropData(tempTableList, "DROP TABLE IF EXISTS ");
+                dropData(tempFunctionList, "DROP FUNCTION IF EXISTS ");
+                dropData(tempProcedureList, "DROP procedure IF EXISTS ");
             }
-            if (!tempProcedureList.isEmpty()) {
-                Statement stmt = sharedConnection.createStatement();
-                for (String procedureName : tempProcedureList) {
-                    try {
-                        stmt.execute("DROP procedure IF EXISTS " + procedureName);
-                    } catch (SQLException e) {
-                        //eat exception
-                    }
-                }
-                tempTableList.clear();
+            try {
+                sharedConnection.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-        }
-        try {
-            sharedConnection.close();
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
     }
+
+    private static void dropData(List<String> dataList, String dropStmt) throws SQLException {
+        if (!dataList.isEmpty()) {
+            Statement stmt = sharedConnection.createStatement();
+            for (String tableName : dataList) {
+                try {
+                    stmt.execute(dropStmt + tableName);
+                } catch (SQLException e) {
+                    //eat exception
+                }
+            }
+            dataList.clear();
+        }
+    }
+
 
     // common function for logging information
     static void logInfo(String message) {
@@ -158,9 +157,21 @@ public class BaseTest {
     public static void createProcedure(String name, String body) throws SQLException {
         Statement stmt = sharedConnection.createStatement();
         stmt.execute("drop procedure IF EXISTS " + name);
-        stmt.execute("create  procedure " + name + body);
+        stmt.execute("create procedure " + name + body);
         tempProcedureList.add(name);
+    }
 
+    /**
+     * Create function that will be delete on end of test.
+     * @param name function name
+     * @param body procecure body
+     * @throws SQLException exception
+     */
+    public static void createFunction(String name, String body) throws SQLException {
+        Statement stmt = sharedConnection.createStatement();
+        stmt.execute("drop FUNCTION IF EXISTS " + name);
+        stmt.execute("create FUNCTION " + name + body);
+        tempProcedureList.add(name);
     }
 
     @Before
@@ -427,4 +438,17 @@ public class BaseTest {
         statement.close();
     }
 
+    /**
+     * Get row number.
+     * @param tableName table name
+     * @return resultset number in this table
+     * @throws SQLException if error occur
+     */
+    public int getRowCount(String tableName) throws SQLException {
+        ResultSet rs = sharedConnection.createStatement().executeQuery("SELECT COUNT(*) FROM " + tableName);
+        if (rs.next()) {
+            return rs.getInt(1);
+        }
+        throw new SQLException("No table "+tableName+" found");
+    }
 }

@@ -1,10 +1,12 @@
 package org.mariadb.jdbc;
 
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 
 import static org.junit.Assert.*;
 
@@ -18,6 +20,29 @@ public class ResultSetTest extends BaseTest {
         createTable("result_set_test", "id int not null primary key auto_increment, name char(20)");
     }
 
+    @Test
+    public void checkColNumber() throws SQLException {
+        insertRows(1);
+        ResultSet resultSet = sharedConnection.createStatement().executeQuery("SELECT * FROM result_set_test");
+        if (resultSet.next()) {
+            try {
+                resultSet.getInt(0);
+                fail("No column 0, must have thrown error !");
+            } catch (SQLException e) {
+                //normal Exception
+            }
+            Assert.assertEquals(resultSet.getInt(1), 1);
+            Assert.assertEquals(resultSet.getString(2), "row1");
+            try {
+                resultSet.getString(3);
+                fail("No column 3, must have thrown error !");
+            } catch (SQLException e) {
+                //normal Exception
+            }
+        } else {
+            fail("Must have one row");
+        }
+    }
 
     @Test
     public void isClosedTest() throws SQLException {
@@ -42,13 +67,23 @@ public class ResultSetTest extends BaseTest {
         }
         assertFalse(resultSet.isBeforeFirst());
         resultSet.close();
-        try {
-            resultSet.isBeforeFirst();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
+        resultSet.isBeforeFirst();
+    }
+
+
+    @Test
+    public void isBeforeFirstTestStream() throws SQLException {
+        insertRows(1);
+        Statement statement = sharedConnection.createStatement();
+        statement.setFetchSize(1);
+        ResultSet resultSet = statement.executeQuery("SELECT * FROM result_set_test");
+        assertTrue(resultSet.isBeforeFirst());
+        while (resultSet.next()) {
+            assertFalse(resultSet.isBeforeFirst());
         }
+        assertFalse(resultSet.isBeforeFirst());
+        resultSet.close();
+        resultSet.isBeforeFirst();
     }
 
     @Test
@@ -59,13 +94,7 @@ public class ResultSetTest extends BaseTest {
         assertFalse(resultSet.next()); //No more rows after this
         assertFalse(resultSet.isFirst()); // connectorj compatibility
         resultSet.close();
-        try {
-            resultSet.isFirst();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isFirst();
     }
 
     @Test
@@ -80,13 +109,7 @@ public class ResultSetTest extends BaseTest {
         resultSet.next(); //No more rows after this
         assertFalse(resultSet.isFirst());
         resultSet.close();
-        try {
-            resultSet.isFirst();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isFirst();
     }
 
     @Test
@@ -97,15 +120,32 @@ public class ResultSetTest extends BaseTest {
         resultSet.next(); //No more rows after this
         assertFalse(resultSet.isLast());
         resultSet.close();
-        try {
-            resultSet.isLast();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isLast();
     }
 
+    @Test
+    public void isLastZeroRowsTest2() throws SQLException {
+        insertRows(1);
+        ResultSet resultSet = sharedConnection.createStatement().executeQuery("SELECT * FROM result_set_test");
+        assertFalse(resultSet.isLast());
+        assertTrue(resultSet.next());
+        assertTrue(resultSet.isLast());
+        assertFalse(resultSet.next());
+        assertFalse(resultSet.isLast());
+        assertTrue(resultSet.isAfterLast());
+    }
+
+    @Test
+    public void isLastZeroRowsTestStreaming() throws SQLException {
+        insertRows(1);
+        ResultSet resultSet = sharedConnection.createStatement().executeQuery("SELECT * FROM result_set_test");
+        assertFalse(resultSet.isLast());
+        assertTrue(resultSet.next());
+        assertTrue(resultSet.isLast());
+        assertFalse(resultSet.next());
+        assertFalse(resultSet.isLast());
+        assertTrue(resultSet.isAfterLast());
+    }
 
     @Test
     public void isLastTwoRowsTest() throws SQLException {
@@ -119,13 +159,7 @@ public class ResultSetTest extends BaseTest {
         resultSet.next(); //No more rows after this
         assertFalse(resultSet.isLast());
         resultSet.close();
-        try {
-            resultSet.isLast();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isLast();
     }
 
     @Test
@@ -136,13 +170,7 @@ public class ResultSetTest extends BaseTest {
         resultSet.next(); //No more rows after this
         assertFalse(resultSet.isAfterLast());
         resultSet.close();
-        try {
-            resultSet.isAfterLast();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isAfterLast();
     }
 
     @Test
@@ -150,20 +178,14 @@ public class ResultSetTest extends BaseTest {
         insertRows(2);
         ResultSet resultSet = sharedConnection.createStatement().executeQuery("SELECT * FROM result_set_test");
         assertFalse(resultSet.isAfterLast());
-        resultSet.next();
+        assertTrue(resultSet.next());
         assertFalse(resultSet.isAfterLast());
-        resultSet.next();
+        assertTrue(resultSet.next());
         assertFalse(resultSet.isAfterLast());
-        resultSet.next(); //No more rows after this
+        assertFalse(resultSet.next());
         assertTrue(resultSet.isAfterLast());
         resultSet.close();
-        try {
-            resultSet.isAfterLast();
-            fail("The above row should have thrown an SQLException");
-        } catch (SQLException e) {
-            //Make sure an exception has been thrown informing us that the ResultSet was closed
-            assertTrue(e.getMessage().contains("closed"));
-        }
+        resultSet.isAfterLast();
     }
 
     @Test
@@ -188,12 +210,7 @@ public class ResultSetTest extends BaseTest {
         assertTrue(rs.first());
         assertTrue(rs.isFirst());
         rs.close();
-        try {
-            rs.first();
-            fail("cannot call first() on a closed result set");
-        } catch (SQLException sqlex) {
-            //eat exception
-        }
+        rs.first();
     }
 
     @Test
@@ -205,12 +222,7 @@ public class ResultSetTest extends BaseTest {
         assertFalse(rs.next());
         rs.first();
         rs.close();
-        try {
-            rs.last();
-            fail("cannot call last() on a closed result set");
-        } catch (SQLException sqlex) {
-            //eat exception
-        }
+        rs.last();
     }
 
     private void insertRows(int numberOfRowsToInsert) throws SQLException {

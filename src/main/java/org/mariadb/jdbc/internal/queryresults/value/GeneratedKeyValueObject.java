@@ -47,9 +47,121 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 OF SUCH DAMAGE.
 */
 
-package org.mariadb.jdbc.internal.queryresults;
+package org.mariadb.jdbc.internal.queryresults.value;
 
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Blob;
+import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.util.Calendar;
 
-public enum ResultSetType {
-    MODIFY, SELECT, GENERATED
+public class GeneratedKeyValueObject implements ValueObject {
+    Long insertId;
+    public GeneratedKeyValueObject(long insertId) {
+        this.insertId = insertId;
+    }
+
+    @Override
+    public String getString(Calendar cal) {
+        return insertId.toString();
+    }
+
+    @Override
+    public String getString() {
+        return insertId.toString();
+    }
+
+    @Override
+    public long getLong() {
+        return insertId;
+    }
+
+    @Override
+    public int getInt() {
+        return insertId.intValue();
+    }
+
+    @Override
+    public short getShort() {
+        return insertId.shortValue();
+    }
+
+    @Override
+    public byte getByte() {
+        return insertId.byteValue();
+    }
+
+    @Override
+    public byte[] getBytes() {
+        return insertId.toString().getBytes();
+    }
+
+    @Override
+    public float getFloat() {
+        return insertId.floatValue();
+    }
+
+    @Override
+    public double getDouble() {
+        return insertId.doubleValue();
+    }
+
+    @Override
+    public BigDecimal getBigDecimal() {
+        return new BigDecimal(insertId);
+    }
+
+    @Override
+    public BigInteger getBigInteger() {
+        return new BigInteger(insertId.toString());
+    }
+
+    @Override
+    public InputStream getInputStream() {
+        return null;
+    }
+
+    @Override
+    public InputStream getBinaryInputStream() {
+        return null;
+    }
+
+    @Override
+    public Object getObject(int datatypeMappingFlags, Calendar cal) throws ParseException {
+        return insertId;
+    }
+
+    @Override
+    public Date getDate(Calendar cal) throws ParseException {
+        return null;
+    }
+
+    @Override
+    public Time getTime(Calendar cal) throws ParseException {
+        return null;
+    }
+
+    @Override
+    public Timestamp getTimestamp(Calendar cal) throws ParseException {
+        return null;
+    }
+
+    @Override
+    public boolean getBoolean() {
+        return insertId == 1;
+    }
+
+    @Override
+    public boolean isNull() {
+        return insertId == null;
+    }
+
+    @Override
+    public Blob getBlob() {
+        return null;
+    }
 }

@@ -58,6 +58,6 @@ public class GeneratedKeysTest extends BaseTest {
         ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
         assertEquals(1, resultSetMetaData.getColumnCount());
         //Since the statement does not generate any keys an empty ResultSet should be returned
-        assertFalse(resultSet.next());
+        assertTrue(resultSet.next());
     }
 }

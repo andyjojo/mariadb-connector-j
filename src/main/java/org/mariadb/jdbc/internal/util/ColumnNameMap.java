@@ -1,4 +1,4 @@
-package org.mariadb.jdbc.internal.queryresults;
+package org.mariadb.jdbc.internal.util;
 
 import org.mariadb.jdbc.internal.packet.dao.ColumnInformation;
 
@@ -12,8 +12,8 @@ public class ColumnNameMap {
     Map<String, Integer> labelMap;
     ColumnInformation[] columnInfo;
 
-    public ColumnNameMap(ColumnInformation[] columnInformations) {
-        this.columnInfo = columnInformations;
+    public ColumnNameMap(ColumnInformation[] columnsInformation) {
+        this.columnInfo = columnsInformation;
     }
 
     /**

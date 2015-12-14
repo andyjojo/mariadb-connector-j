@@ -60,6 +60,7 @@ import org.mariadb.jdbc.internal.failover.tools.SearchFilter;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -280,7 +281,6 @@ public abstract class AbstractMastersListener implements Listener {
 
             try {
                 to.setMaxRows(from.getMaxRows());
-                to.setInternalMaxRows(from.getMaxRows());
                 if (from.getTransactionIsolationLevel() != 0) {
                     to.setTransactionIsolation(from.getTransactionIsolationLevel());
                 }

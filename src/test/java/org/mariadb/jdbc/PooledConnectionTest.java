@@ -73,7 +73,7 @@ public class PooledConnectionTest extends BaseTest {
             ps.execute();
             Assert.assertTrue("should never get there", false);
         } catch (Exception e) {
-            Assert.assertTrue(listener.statementErrorOccured && listener.sqlException.getSQLState().equals("07004"));
+            Assert.assertTrue(listener.statementErrorOccured && listener.sqlException.getSQLState().equals("07001"));
         }
         ps.close();
         Assert.assertTrue(listener.statementClosed);

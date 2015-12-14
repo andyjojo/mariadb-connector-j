@@ -90,7 +90,7 @@ public class SendExecutePrepareStatementPacket implements InterfaceSendPacket {
         buffer.startPacket(0, true);
         buffer.buffer.put((byte) 0x17);
         buffer.buffer.putInt(statementId);
-        buffer.buffer.put((byte) 0x00); //CURSOR TYPE NO CURSOR TODO implement when using cursor
+        buffer.buffer.put((byte) 0x00); //CURSOR TYPE NO CURSOR
         buffer.buffer.putInt(1); //Iteration count
 
         //create null bitmap

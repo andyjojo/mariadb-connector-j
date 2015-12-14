@@ -83,6 +83,16 @@ public class ExceptionMapper {
     }
 
     /**
+     * Helper to throw exception.
+     * @param message exception message
+     * @param exceptionCode exceptionCode
+     * @throws SQLException exception
+     */
+    public static void throwException(String message, ExceptionCode exceptionCode) throws SQLException {
+        throw getSqlException(message, exceptionCode.sqlState, null);
+    }
+
+    /**
      * Helper to create exception from queryException.
      * @param exception exception
      * @param connection current connection
@@ -154,7 +164,7 @@ public class ExceptionMapper {
     }
 
     /**
-     * Mapp code to State.
+     * Map code to State.
      * @param code code
      * @return String
      */

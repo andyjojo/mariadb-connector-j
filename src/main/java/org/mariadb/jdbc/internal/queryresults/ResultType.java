@@ -49,13 +49,7 @@ OF SUCH DAMAGE.
 
 package org.mariadb.jdbc.internal.queryresults;
 
-import org.mariadb.jdbc.internal.util.dao.QueryException;
 
-
-public class NoSuchColumnException extends QueryException {
-    private static final long serialVersionUID = -4592661729870053440L;
-
-    public NoSuchColumnException(final String reason) {
-        super(reason);
-    }
+public enum ResultType {
+    MODIFY, SELECT, GENERATED
 }

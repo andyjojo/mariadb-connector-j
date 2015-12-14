@@ -52,13 +52,13 @@ package org.mariadb.jdbc.internal.failover.impl;
 import org.mariadb.jdbc.HostAddress;
 import org.mariadb.jdbc.UrlParser;
 import org.mariadb.jdbc.internal.failover.tools.SearchFilter;
+import org.mariadb.jdbc.internal.queryresults.MariaSelectResultSet;
 import org.mariadb.jdbc.internal.util.dao.QueryException;
 import org.mariadb.jdbc.internal.query.MariaDbQuery;
-import org.mariadb.jdbc.internal.queryresults.SelectQueryResult;
 import org.mariadb.jdbc.internal.protocol.AuroraProtocol;
 import org.mariadb.jdbc.internal.protocol.Protocol;
 
-import java.io.IOException;
+import java.sql.SQLException;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -161,34 +161,35 @@ public class AuroraListener extends MastersSlavesListener {
      */
     public HostAddress searchByStartName(Protocol secondaryProtocol, List<HostAddress> loopAddress) {
         if (!isSecondaryHostFail()) {
-            SelectQueryResult queryResult = null;
+            MariaSelectResultSet queryResult = null;
             try {
                 proxy.lock.lock();
                 try {
-                    queryResult = (SelectQueryResult) secondaryProtocol.executeQuery(new MariaDbQuery(
+                    queryResult = (MariaSelectResultSet) secondaryProtocol.executeQuery(new MariaDbQuery(
                             "select server_id from information_schema.replica_host_status where session_id = 'MASTER_SESSION_ID'"));
                     queryResult.next();
                 } finally {
                     proxy.lock.unlock();
                 }
-                String masterHostName = queryResult.getValueObject(0).getString();
+                String masterHostName = queryResult.getString(1);
                 for (int i = 0; i < loopAddress.size(); i++) {
                     if (loopAddress.get(i).host.startsWith(masterHostName)) {
-//                        if (log.isTraceEnabled()) log.trace("master probably " + loopAddress.get(i));
                         return loopAddress.get(i);
                     }
                 }
-            } catch (IOException ioe) {
-//                log.trace("searchByStartName failed", ioe);
+            } catch (SQLException ioe) {
                 //eat exception
             } catch (QueryException qe) {
                 if (proxy.hasToHandleFailover(qe) && setSecondaryHostFail()) {
-//                  log.warn("SQL Secondary node [" + this.currentProtocol.getHostAddress().toString() + "] connection fail ");
                     addToBlacklist(currentProtocol.getHostAddress());
                 }
             } finally {
                 if (queryResult != null) {
-                    queryResult.close();
+                    try {
+                        queryResult.close();
+                    } catch (SQLException e) {
+                        //eat exception
+                    }
                 }
             }
         }

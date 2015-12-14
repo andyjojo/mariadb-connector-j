@@ -157,13 +157,12 @@ public class MariaDbCallableStatement implements CallableStatement {
 
 
     void readOutputParameters() throws SQLException {
-        if (callStatement.getFetchSize() == Integer.MIN_VALUE) {
-            // For streaming queries
-            // make sure there are no more results left from the call statement
-            while (callStatement.getMoreResults()) {
-            }
-            ;
-        }
+//        if (callStatement.getFetchSize() == 0) {
+//            // For streaming queries
+//            // make sure there are no more results left from the call statement
+//            while (callStatement.getMoreResults()) {
+//            }
+//        }
 
         StringBuffer sb = new StringBuffer("SELECT ");
         for (int i = 1; i <= parametersCount; i++) {
@@ -219,10 +218,10 @@ public class MariaDbCallableStatement implements CallableStatement {
      * @throws SQLException exception
      */
     private int nameToIndex(String parameterName) throws SQLException {
-        if (callStatement != null) {
-            while (callStatement.getMoreResults()) {
-            }
-        }
+//        if (callStatement != null) {
+//            while (callStatement.getMoreResults()) {
+//            }
+//        }
         for (int i = 1; i <= parameterMetadata.getParameterCount(); i++) {
             String name = parameterMetadata.getName(i);
             if (name != null && name.equalsIgnoreCase(parameterName)) {
@@ -327,7 +326,7 @@ public class MariaDbCallableStatement implements CallableStatement {
 
     CallParameter getParameter(int index) throws SQLException {
         if (index > params.length || index < 1) {
-            throw new SQLException("No parameter with index " + index);
+            throw new SQLException("No parameter with index " + index, "07004");
         }
         return params[index];
     }
@@ -1382,7 +1381,7 @@ public class MariaDbCallableStatement implements CallableStatement {
 
             // Read off output parameters, if there are any
             // (but not if query is streaming)
-            if (hasOutputParameters() && callStatement.getFetchSize() != Integer.MIN_VALUE) {
+            if (hasOutputParameters() && callStatement.getFetchSize() == 0) {
                 readOutputParameters();
             }
             return ret;

@@ -49,71 +49,52 @@ OF SUCH DAMAGE.
 
 package org.mariadb.jdbc.internal.queryresults;
 
-import org.mariadb.jdbc.internal.packet.dao.ColumnInformation;
+import org.mariadb.jdbc.internal.util.dao.PrepareResult;
 
+import java.sql.SQLException;
+import java.sql.Statement;
 
-public class UpdateResult extends ModifyQueryResult {
-    private long updateCount;
-    private short warnings;
-    private final String message;
-    private final long insertId;
+public abstract class AbstractResult {
+    protected boolean isClosed;
+    protected PrepareResult prepareResult;
+    protected AbstractResult moreResult;
+    protected Statement statement;
 
-    /**
-     * Create Update result object.
-     * @param updateCount updateCount
-     * @param warnings warnings
-     * @param message message
-     * @param insertId insertId
-     */
-    public UpdateResult(final long updateCount, final short warnings, final String message, final long insertId) {
-        this.updateCount = updateCount;
-        this.warnings = warnings;
-        this.message = message;
-        this.insertId = insertId;
+    public AbstractResult(Statement statement) {
+        this.statement = statement;
+        isClosed = false;
+        moreResult = null;
+        prepareResult = null;
     }
 
-    /**
-     * When using rewrite statement, there can be many insert/update command send to database, according to max_allowed_packet size.
-     * the result will be aggregate with this method to give only one result stream to client.
-     * @param other other AbstractQueryResult.
-     */
-    public void addResult(AbstractQueryResult other) {
-        if (other.prepareResult != null) {
-            prepareResult = other.prepareResult;
-        }
-        isClosed = other.isClosed();
-        if (other instanceof UpdateResult) {
-            UpdateResult updateResult = (UpdateResult) other;
-            this.updateCount += updateResult.getUpdateCount();
-            this.warnings += updateResult.getWarnings();
-        }
+    public abstract void addResult(AbstractResult resultset);
+    public abstract ResultType getResultType();
+
+    public void close() throws SQLException {
+        isClosed = true;
     }
 
-    public long getUpdateCount() {
-        return updateCount;
+    public PrepareResult getFailureObject() {
+        return this.prepareResult;
     }
 
-    public ResultSetType getResultSetType() {
-        return ResultSetType.MODIFY;
+    public void setFailureObject(PrepareResult resultObject) {
+        this.prepareResult = resultObject;
     }
 
-    public short getWarnings() {
-        return warnings;
+    public boolean isClosed() {
+        return isClosed;
     }
 
-    public String getMessage() {
-        return message;
+    public AbstractResult getMoreResult() {
+        return moreResult;
     }
 
-    public ColumnInformation[] getColumnInformation() {
-        return null;
+    public Statement getStatement() {
+        return statement;
     }
 
-    public int getRows() {
-        return 0;
-    }
-
-    public long getInsertId() {
-        return insertId;
+    public void setStatement(Statement statement) {
+        this.statement = statement;
     }
 }

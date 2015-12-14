@@ -53,10 +53,10 @@ import org.mariadb.jdbc.HostAddress;
 import org.mariadb.jdbc.UrlParser;
 import org.mariadb.jdbc.internal.MariaDbType;
 import org.mariadb.jdbc.internal.failover.FailoverProxy;
+import org.mariadb.jdbc.internal.queryresults.AbstractResult;
 import org.mariadb.jdbc.internal.util.Options;
 import org.mariadb.jdbc.internal.util.PrepareStatementCache;
 import org.mariadb.jdbc.internal.util.dao.QueryException;
-import org.mariadb.jdbc.internal.queryresults.AbstractQueryResult;
 import org.mariadb.jdbc.internal.query.Query;
 import org.mariadb.jdbc.internal.packet.dao.parameters.ParameterHolder;
 import org.mariadb.jdbc.internal.util.dao.PrepareResult;
@@ -64,8 +64,11 @@ import org.mariadb.jdbc.internal.util.dao.PrepareResult;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketException;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Calendar;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 
 public interface Protocol {
     PrepareResult prepare(String sql) throws QueryException;
@@ -87,8 +90,6 @@ public interface Protocol {
     void setProxy(FailoverProxy proxy);
 
     Options getOptions();
-
-    boolean hasMoreResults();
 
     void close();
 
@@ -128,17 +129,15 @@ public interface Protocol {
 
     boolean ping() throws QueryException;
 
-    AbstractQueryResult executeQuery(Query query) throws QueryException;
+    AbstractResult executeQuery(Query query) throws QueryException;
 
-    AbstractQueryResult executeQuery(final List<Query> queries, boolean streaming, boolean isRewritable, int rewriteOffset) throws QueryException;
+    AbstractResult executeQuery(Query query, int resultSetType) throws QueryException;
 
-    AbstractQueryResult executeQuery(Query query, boolean streaming) throws QueryException;
+    AbstractResult executeQuery(Statement statement, final List<Query> queries, int fetchSize, boolean isRewritable, int rewriteOffset, int resultSetType) throws QueryException;
 
-    AbstractQueryResult getResult(Object queryObj, boolean streaming, boolean binaryProtocol) throws QueryException;
+    AbstractResult executeQuery(Statement statement, Query query, int fetchSize, int resultSetType) throws QueryException;
 
     void cancelCurrentQuery() throws QueryException, IOException;
-
-    AbstractQueryResult getMoreResults(boolean streaming) throws QueryException;
 
     boolean hasUnreadData();
 
@@ -176,7 +175,7 @@ public interface Protocol {
 
     boolean isExplicitClosed();
 
-    void closeIfActiveResult();
+    void closeIfActiveResult() throws SQLException;
 
     void connectWithoutProxy() throws QueryException;
 
@@ -184,13 +183,13 @@ public interface Protocol {
 
     void setHostFailedWithoutProxy();
 
-    AbstractQueryResult executePreparedQuery(String sql, ParameterHolder[] parameters, PrepareResult prepareResult, MariaDbType[] parameterTypeHeader,
-                                     boolean isStreaming) throws QueryException;
+    AbstractResult executePreparedQuery(Statement statement, String sql, ParameterHolder[] parameters, PrepareResult prepareResult, MariaDbType[] parameterTypeHeader,
+                                        int fetchSize, int resultSetType) throws QueryException;
 
     void releasePrepareStatement(String sql, int statementId) throws QueryException;
 
-    AbstractQueryResult executePreparedQueryAfterFailover(String sql, ParameterHolder[] parameters, PrepareResult oldPrepareResult,
-                                                  MariaDbType[] parameterTypeHeader, boolean isStreaming) throws QueryException; //used
+    AbstractResult executePreparedQueryAfterFailover(Statement statement, String sql, ParameterHolder[] parameters, PrepareResult oldPrepareResult,
+                                                     MariaDbType[] parameterTypeHeader, int fetchSize, int resultSetType) throws QueryException; //used
 
     PrepareStatementCache prepareStatementCache();
 
@@ -198,5 +197,17 @@ public interface Protocol {
     String getServerData(String code);
 
     Calendar getCalendar();
+
+    void setActiveResult(AbstractResult activeResult);
+
+    AbstractResult getActiveResult();
+
+    boolean isHasWarnings();
+
+    void setHasWarnings(boolean hasWarnings);
+
+    ReentrantLock getLock();
+
+    AbstractResult fetchResult(Statement statement, Object queriesObj, int fetchSize, boolean binaryProtocol, int resultSetType) throws QueryException;
 
 }

@@ -21,7 +21,6 @@ public class MultiTest extends BaseTest {
         createTable("MultiTestt2", "id int, test varchar(100)");
         createTable("MultiTestt3", "message text");
         createTable("MultiTestt4", "id int, test varchar(100), PRIMARY KEY (`id`)");
-        createTable("MultiTestt5", "id int, test varchar(100)");
         createTable("MultiTestt6", "id int, test varchar(100)");
         createTable("MultiTestt7", "id int, test varchar(100)");
         createTable("MultiTestt8", "id int, test varchar(100)");
@@ -40,7 +39,6 @@ public class MultiTest extends BaseTest {
         Statement st = sharedConnection.createStatement();
         st.execute("insert into MultiTestt1 values(1,'a'),(2,'a')");
         st.execute("insert into MultiTestt2 values(1,'a'),(2,'a')");
-        st.execute("insert into MultiTestt5 values(1,'a'),(2,'a'),(2,'b')");
     }
 
     @Test
@@ -71,84 +69,6 @@ public class MultiTest extends BaseTest {
         Assert.assertEquals(rs.getInt(2), 1);
     }
 
-    @Test
-    public void basicTest() throws SQLException {
-        log.debug("basicTest begin");
-        Connection connection = null;
-        try {
-            connection = setConnection("&allowMultiQueries=true");
-            Statement statement = connection.createStatement();
-            ResultSet rs = statement.executeQuery("select * from MultiTestt1;select * from MultiTestt2;");
-            int count = 0;
-            while (rs.next()) {
-                count++;
-            }
-            assertTrue(count > 0);
-            assertTrue(statement.getMoreResults());
-            rs = statement.getResultSet();
-            count = 0;
-            while (rs.next()) {
-                count++;
-            }
-            assertTrue(count > 0);
-            assertFalse(statement.getMoreResults());
-            log.debug("basicTest end");
-        } finally {
-            connection.close();
-        }
-    }
-
-    @Test
-    public void updateTest() throws SQLException {
-        log.debug("updateTest begin");
-        Connection connection = null;
-        try {
-            connection = setConnection("&allowMultiQueries=true");
-            Statement statement = connection.createStatement();
-            statement.execute("update MultiTestt5 set test='a " + System.currentTimeMillis()
-                    + "' where id = 2;select * from MultiTestt2;");
-            int updateNb = statement.getUpdateCount();
-            log.debug("statement.getUpdateCount() " + updateNb);
-            assertTrue(updateNb == 2);
-            assertTrue(statement.getMoreResults());
-            ResultSet rs = statement.getResultSet();
-            int count = 0;
-            while (rs.next()) {
-                count++;
-            }
-            assertTrue(count > 0);
-            assertFalse(statement.getMoreResults());
-            log.debug("updateTest end");
-        } finally {
-            connection.close();
-        }
-    }
-
-    @Test
-    public void updateTest2() throws SQLException {
-        log.debug("updateTest2 begin");
-        Connection connection = null;
-        try {
-            connection = setConnection("&allowMultiQueries=true");
-            Statement statement = connection.createStatement();
-            statement.execute("select * from MultiTestt2;update MultiTestt5 set test='a " + System.currentTimeMillis()
-                    + "' where id = 2;");
-            ResultSet rs = statement.getResultSet();
-            int count = 0;
-            while (rs.next()) {
-                count++;
-            }
-            assertTrue(count == 2);
-            statement.getMoreResults();
-
-            int updateNb = statement.getUpdateCount();
-            log.debug("statement.getUpdateCount() " + updateNb);
-            assertEquals(2, updateNb);
-            log.debug("updateTest2 end");
-        } finally {
-            connection.close();
-        }
-    }
 
     @Test
     public void selectTest() throws SQLException {
@@ -171,45 +91,6 @@ public class MultiTest extends BaseTest {
             }
             assertTrue(count > 0);
             log.debug("selectTest end");
-        } finally {
-            connection.close();
-        }
-    }
-
-    @Test
-    public void setMaxRowsMulti() throws Exception {
-        log.debug("setMaxRowsMulti begin");
-        Connection connection = null;
-        try {
-            connection = setConnection("&allowMultiQueries=true");
-            Statement st = connection.createStatement();
-            assertEquals(0, st.getMaxRows());
-
-            st.setMaxRows(1);
-            assertEquals(1, st.getMaxRows());
-
-            /* Check 3 rows are returned if maxRows is limited to 3, in every result set in batch */
-
-           /* Check first result set for at most 3 rows*/
-            ResultSet rs = st.executeQuery("select 1 union select 2;select 1 union select 2");
-            int cnt = 0;
-
-            while (rs.next()) {
-                cnt++;
-            }
-            rs.close();
-            assertEquals(1, cnt);
-
-           /* Check second result set for at most 3 rows*/
-            assertTrue(st.getMoreResults());
-            rs = st.getResultSet();
-            cnt = 0;
-            while (rs.next()) {
-                cnt++;
-            }
-            rs.close();
-            assertEquals(1, cnt);
-            log.debug("setMaxRowsMulti end");
         } finally {
             connection.close();
         }

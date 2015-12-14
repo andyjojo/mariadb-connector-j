@@ -47,7 +47,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 OF SUCH DAMAGE.
 */
 
-package org.mariadb.jdbc.internal.queryresults;
+package org.mariadb.jdbc.internal.queryresults.value;
 
 import org.mariadb.jdbc.MariaDbBlob;
 import org.mariadb.jdbc.MariaDbClob;
@@ -915,6 +915,11 @@ public class MariaDbValueObject implements ValueObject {
                     Timestamp tt = new Timestamp(getTime(cal).getTime());
                     tt.setNanos(extractNanos(rawValue));
                     return tt;
+                case DATE:
+                    //time does not go after millisecond
+                    Timestamp dateTimestamps = new Timestamp(getDate(cal).getTime());
+                    dateTimestamps.setNanos(extractNanos(rawValue));
+                    return dateTimestamps;
                 default:
                     try {
                         int year = Integer.parseInt(rawValue.substring(0, 4));

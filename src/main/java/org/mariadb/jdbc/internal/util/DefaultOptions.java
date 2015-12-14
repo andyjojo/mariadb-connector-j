@@ -314,7 +314,13 @@ public enum DefaultOptions {
      * if allowMultiQueries or rewriteBatchedStatements is set to true, this options will be set to false.
      * default to true.
      */
-    USESERVERPREPSTMTS("useServerPrepStmts", Boolean.TRUE, "1.3.0");
+    USESERVERPREPSTMTS("useServerPrepStmts", Boolean.TRUE, "1.3.0"),
+
+    /**
+     * When executing batch queries, must batch continue on error.
+     * default to true.
+     */
+    CONTINUE_BATCH_ON_ERROR("continueBatchOnError", Boolean.TRUE, "1.4.0");
 
 
     protected final String name;

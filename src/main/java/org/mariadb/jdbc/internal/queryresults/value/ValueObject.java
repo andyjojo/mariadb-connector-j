@@ -47,14 +47,58 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 OF SUCH DAMAGE.
 */
 
-package org.mariadb.jdbc.internal.queryresults;
+package org.mariadb.jdbc.internal.queryresults.value;
+
+import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.*;
+import java.text.ParseException;
+import java.util.Calendar;
 
 
-public abstract class ModifyQueryResult extends AbstractQueryResult {
-    public abstract long getUpdateCount();
+public interface ValueObject {
 
-    public abstract String getMessage();
+    int TINYINT1_IS_BIT = 1;
+    int YEAR_IS_DATE_TYPE = 2;
 
-    public abstract long getInsertId();
+    String getString(Calendar cal);
 
+    String getString();
+
+    long getLong();
+
+    int getInt();
+
+    short getShort();
+
+    byte getByte();
+
+    byte[] getBytes();
+
+    float getFloat();
+
+    double getDouble();
+
+    BigDecimal getBigDecimal();
+
+    BigInteger getBigInteger();
+
+    InputStream getInputStream();
+
+    InputStream getBinaryInputStream();
+
+    Object getObject(int datatypeMappingFlags, Calendar cal) throws ParseException;
+
+    Date getDate(Calendar cal) throws ParseException;
+
+    Time getTime(Calendar cal) throws ParseException;
+
+    Timestamp getTimestamp(Calendar cal) throws ParseException;
+
+    boolean getBoolean();
+
+    boolean isNull();
+
+    Blob getBlob();
 }

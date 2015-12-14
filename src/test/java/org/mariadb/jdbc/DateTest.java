@@ -20,7 +20,7 @@ public class DateTest extends BaseTest {
      */
     @BeforeClass()
     public static void initClass() throws SQLException {
-        createTable("dtest", "d date");
+        createTable("dtestDate", "d date");
         createTable("date_test2", "id int not null primary key auto_increment, d_from datetime ,d_to datetime");
         createTable("timetest", "t time");
         createTable("timetest2", "t time");
@@ -252,6 +252,26 @@ public class DateTest extends BaseTest {
         rs.next();
         /* Check that time is correct, up to seconds precision */
         Assert.assertTrue(Math.abs((currentDate.getTime() - rs.getTimestamp(1).getTime())) <= 1000);
+    }
+
+
+    @Test
+    public void javaUtilDateInPreparedStatement() throws Exception {
+        Calendar calendar = Calendar.getInstance();
+        java.util.Date currentDate = calendar.getTime();
+        PreparedStatement ps = sharedConnection.prepareStatement("insert into dtestDate values(?)");
+        ps.setObject(1, currentDate, Types.TIMESTAMP);
+        ps.executeUpdate();
+        Statement st = sharedConnection.createStatement();
+        ResultSet rs = st.executeQuery("select * from dtestDate");
+        rs.next();
+
+        calendar.set(Calendar.MILLISECOND, 0);
+        calendar.set(Calendar.SECOND, 0);
+        calendar.set(Calendar.MINUTE, 0);
+        calendar.set(Calendar.HOUR_OF_DAY, 0);
+
+        Assert.assertEquals(calendar.getTimeInMillis(), rs.getTimestamp(1).getTime());
     }
 
     @Test

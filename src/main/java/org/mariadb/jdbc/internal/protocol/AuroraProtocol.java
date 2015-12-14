@@ -52,14 +52,14 @@ package org.mariadb.jdbc.internal.protocol;
 import org.mariadb.jdbc.HostAddress;
 import org.mariadb.jdbc.UrlParser;
 import org.mariadb.jdbc.internal.failover.FailoverProxy;
-import org.mariadb.jdbc.internal.util.ExceptionMapper;
-import org.mariadb.jdbc.internal.util.dao.QueryException;
-import org.mariadb.jdbc.internal.query.MariaDbQuery;
-import org.mariadb.jdbc.internal.queryresults.SelectQueryResult;
 import org.mariadb.jdbc.internal.failover.impl.AuroraListener;
 import org.mariadb.jdbc.internal.failover.tools.SearchFilter;
+import org.mariadb.jdbc.internal.query.MariaDbQuery;
+import org.mariadb.jdbc.internal.queryresults.MariaSelectResultSet;
+import org.mariadb.jdbc.internal.util.ExceptionMapper;
+import org.mariadb.jdbc.internal.util.dao.QueryException;
 
-import java.io.IOException;
+import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -262,17 +262,17 @@ public class AuroraProtocol extends MastersSlavesProtocol {
     public boolean checkIfMaster() throws QueryException {
         proxy.lock.lock();
         try {
-            SelectQueryResult queryResult = (SelectQueryResult) executeQuery(new MariaDbQuery("show global variables like 'innodb_read_only'"));
+            MariaSelectResultSet queryResult = (MariaSelectResultSet) executeQuery(new MariaDbQuery("show global variables like 'innodb_read_only'"));
             if (queryResult != null) {
                 queryResult.next();
-                this.masterConnection = "OFF".equals(queryResult.getValueObject(1).getString());
+                this.masterConnection = "OFF".equals(queryResult.getString(2));
             } else {
                 this.masterConnection = false;
             }
             this.readOnly = !this.masterConnection;
             return this.masterConnection;
 
-        } catch (IOException ioe) {
+        } catch (SQLException ioe) {
             //log.trace("exception during checking if master", ioe);
             throw new QueryException("could not check the 'innodb_read_only' variable status on " + this.getHostAddress()
                     + " : " + ioe.getMessage(), -1, ExceptionMapper.SqlStates.CONNECTION_EXCEPTION.getSqlState(), ioe);

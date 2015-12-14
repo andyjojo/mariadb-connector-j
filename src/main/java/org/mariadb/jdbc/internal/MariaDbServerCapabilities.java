@@ -68,6 +68,7 @@ public class MariaDbServerCapabilities {
     public static final int SECURE_CONNECTION = 32768;  /* New 4.1 authentication */
     public static final int MULTI_STATEMENTS = 1 << 16; /* Enable/disable multi-stmt support */
     public static final int MULTI_RESULTS = 1 << 17;    /* Enable/disable multi-results */
+    public static final int MULTI_PS_RESULTS = 1 << 18;    /* Enable/disable multi-results for prepared statement*/
     public static final int PLUGIN_AUTH = 1 << 19;      /* Client supports plugin authentication */
     public static final int PROGRESS = 1 << 29;         /* Client support progress indicator */
 }

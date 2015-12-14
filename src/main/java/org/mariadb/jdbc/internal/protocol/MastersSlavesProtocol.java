@@ -62,8 +62,8 @@ import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class MastersSlavesProtocol extends MasterProtocol {
-    boolean masterConnection = false;
-    boolean mustBeMasterConnection = false;
+    protected boolean masterConnection = false;
+    private boolean mustBeMasterConnection = false;
 
     public MastersSlavesProtocol(final UrlParser url, final ReentrantLock lock) {
         super(url, lock);
